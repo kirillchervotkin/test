@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Debug NestJS (ESM with tsx)",
+            "runtimeExecutable": "node",
+            "runtimeArgs": [
+                "--import=tsx",
+                "--no-warnings"
+            ],
+            "program": "${workspaceFolder}/src/main.ts",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env",
+            "sourceMaps": true,
+            "internalConsoleOptions": "neverOpen"
+        }
+    ]
+}

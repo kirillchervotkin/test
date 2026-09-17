@@ -1,0 +1,10 @@
+{
+  "NOT_EMPTY": "Field {property} cannot be empty.",
+  "IS_STRING": "Field {property} must be a string.",
+  "MAX_LENGTH": "Field {property} must not exceed {constraints.0} characters.",
+  "INVALID_EMAIL": "Invalid email format.",
+  "UNIQUE": "Value '{value}' for field '{field}' is already taken.",
+  "UNIQUE_COMPOSITE": "Combination of fields already exists.",
+  "MIN": "Value must be at least {constraints.0}.",
+  "IS_INT": "Value must be an integer."
+}

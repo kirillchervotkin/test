@@ -1,0 +1,1 @@
+export const FIELD_ROLE_SERVICE = 'FIELD_ROLE_SERVICE';

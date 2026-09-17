@@ -1,0 +1,1 @@
+export const TOURNAMENTS_SERVICE = Symbol('TOURNAMENTS_SERVICE');

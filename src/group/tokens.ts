@@ -1,0 +1,1 @@
+export const GROUP_SERVICE = 'GROUPS_SERVICE';
