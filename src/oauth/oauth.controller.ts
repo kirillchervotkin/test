@@ -42,29 +42,37 @@ export class OauthController {
     private readonly backfillService: BackfillService,
   ) {}
 
-  private sendErrorResponse(res: Response, error: string, status: HttpStatus) {
-    res.status(status).send(`
+  private sendResult(res: Response, success: boolean, status: HttpStatus) {
+    const frontend = new URL(process.env.FRONTEND_URL!);
+    const targetOrigin = JSON.stringify(frontend.origin);
+    const returnUrl = new URL('/connected-accounts', frontend).href;
+    res.status(status).type('html').send(`<!doctype html>
+      <html lang="ru"><meta charset="utf-8"><title>Подключение Polar</title>
+      <body><h1>${success ? 'Аккаунт Polar связан' : 'Не удалось подключить Polar'}</h1>
+      <p>${success ? 'Можно вернуться в Arbitrator.' : 'Вернитесь в Arbitrator и повторите подключение.'}</p>
+      <a href="${returnUrl}">Вернуться в Arbitrator</a>
       <script>
-        window.opener.postMessage({ 
-          type: 'OAUTH_CONNECT', 
-          success: false, 
-          error: ${JSON.stringify(error)}
-        }, '*');
-        window.close();
-      </script>
-    `);
+        if (window.opener) {
+          window.opener.postMessage({type: 'OAUTH_CONNECT', success: ${success}}, ${targetOrigin});
+          window.close();
+        }
+      </script></body></html>`);
+  }
+
+  private sendErrorResponse(res: Response, _error: string, status: HttpStatus) {
+    this.sendResult(res, false, status);
   }
 
   private sendSuccessResponse(res: Response) {
-    return res.status(HttpStatus.OK).send(`
-        <script>
-          window.opener.postMessage({ 
-            type: 'OAUTH_CONNECT', 
-            success: true 
-          }, '*');
-          window.close();
-        </script>
-      `);
+    this.sendResult(res, true, HttpStatus.OK);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Get('status')
+  async status(@UserId() userId: string) {
+    const token = await this.oauthTokenService.getAccessToken(userId, 'polar');
+    return { polar: { connected: Boolean(token) } };
   }
 
   @UseGuards(JwtAuthGuard)
@@ -208,55 +216,76 @@ export class OauthController {
     @Query() queryParams: OauthCallbackQueryDto,
     @Res() res: Response,
   ): Promise<void> {
-    const stateData = await this.oauthService.getState(queryParams.state);
+    try {
+      const stateData = await this.oauthService.getState(queryParams.state);
 
-    if (!stateData) {
-      this.sendErrorResponse(res, 'invalid state', HttpStatus.BAD_REQUEST);
-      return;
-    }
-    await this.oauthService.deleteState(queryParams.state);
+      if (!stateData) {
+        this.sendErrorResponse(res, 'invalid state', HttpStatus.BAD_REQUEST);
+        return;
+      }
+      await this.oauthService.deleteState(queryParams.state);
 
-    const tokens = await this.oauthService.exchangeCode(
-      stateData.provider,
-      queryParams.code,
-      queryParams.state,
-    );
-
-    await this.polarApiService.registerUser(
-      tokens.access_token,
-      stateData.userId.toString(),
-    );
-
-    await this.oauthTokenService.storeTokens({
-      serviceName: stateData.provider,
-      userId: stateData.userId,
-      accessToken: tokens.access_token,
-      expiresIn: tokens.expires_in,
-      externalUserId: tokens.x_user_id,
-    });
-
-    // Fire-and-forget: ставим в очередь все тренировки за 90 дней.
-    // Пользователь не должен ждать — обработка пойдёт асинхронно
-    // через тот же пайплайн, что и реальные Polar-вебхуки.
-    void this.backfillService
-      .enqueueAllExercises(String(tokens.x_user_id), tokens.access_token)
-      .catch((err: unknown) => {
-        this.logger.error(
-          `Backfill enqueue failed for polarUserId=${tokens.x_user_id}`,
-          err instanceof Error ? err.stack : String(err),
+      if (queryParams.error || !queryParams.code) {
+        this.sendErrorResponse(
+          res,
+          'Authorization declined',
+          HttpStatus.BAD_REQUEST,
         );
+        return;
+      }
+
+      const tokens = await this.oauthService.exchangeCode(
+        stateData.provider,
+        queryParams.code,
+        queryParams.state,
+      );
+
+      await this.polarApiService.registerUser(
+        tokens.access_token,
+        stateData.userId.toString(),
+        String(tokens.x_user_id),
+      );
+
+      await this.oauthTokenService.storeTokens({
+        serviceName: stateData.provider,
+        userId: stateData.userId,
+        accessToken: tokens.access_token,
+        expiresIn: tokens.expires_in,
+        externalUserId: String(tokens.x_user_id),
       });
 
-    if (stateData.client_type === 'web') {
-      this.sendSuccessResponse(res);
-      return;
-    } else {
+      // Fire-and-forget: ставим в очередь все тренировки за 90 дней.
+      // Пользователь не должен ждать — обработка пойдёт асинхронно
+      // через тот же пайплайн, что и реальные Polar-вебхуки.
+      void this.backfillService
+        .enqueueAllExercises(String(tokens.x_user_id), tokens.access_token)
+        .catch((err: unknown) => {
+          this.logger.error(
+            `Backfill enqueue failed for polarUserId=${tokens.x_user_id}`,
+            err instanceof Error ? err.stack : String(err),
+          );
+        });
+
+      if (stateData.client_type === 'web') {
+        this.sendSuccessResponse(res);
+        return;
+      } else {
+        this.sendErrorResponse(
+          res,
+          'Unsupported client type',
+          HttpStatus.BAD_REQUEST,
+        );
+        return;
+      }
+    } catch {
+      this.logger.error(
+        'OAuth callback failed; returning failure to the frontend',
+      );
       this.sendErrorResponse(
         res,
-        'Unsupported client type',
-        HttpStatus.BAD_REQUEST,
+        'Connection failed',
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
-      return;
     }
   }
 }

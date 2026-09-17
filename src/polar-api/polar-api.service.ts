@@ -63,10 +63,14 @@ export class PolarApiService {
    * @param memberId    Ваш внутренний ID пользователя
    * @returns Polar user-id (совпадает с x_user_id из OAuth-ответа)
    */
-  async registerUser(accessToken: string, memberId: string): Promise<string> {
+  async registerUser(
+    accessToken: string,
+    memberId: string,
+    expectedPolarUserId?: string,
+  ): Promise<string> {
     const url = '/v3/users';
 
-    const res = await this.http.post<unknown>(
+    let res = await this.http.post<unknown>(
       url,
       { 'member-id': memberId },
       {
@@ -77,7 +81,27 @@ export class PolarApiService {
       },
     );
 
-    // 201 — новый пользователь, 200 — уже существует.
+    // A retry after registration can return 409. Verify the existing membership.
+    if (res.status === 409 && expectedPolarUserId) {
+      res = await this.http.get<unknown>(
+        `/v3/users/${encodeURIComponent(expectedPolarUserId)}`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        },
+      );
+      this.assertOk(res.status, res.data, url);
+      const existing = this.parse(RegisterUserResponseSchema, res.data, url);
+      if (
+        existing['member-id'] !== memberId ||
+        existing['polar-user-id'] !== expectedPolarUserId
+      ) {
+        throw new InternalServerErrorException(
+          'Polar account is linked to another member',
+        );
+      }
+    }
+
+    // 201 — новый пользователь, 200 — данные существующего пользователя.
     // Оба варианта успешны и возвращают user-id.
     if (res.status !== 201 && res.status !== 200) {
       this.assertOk(res.status, res.data, url);
@@ -87,10 +111,10 @@ export class PolarApiService {
 
     this.logger.log(
       `User ${memberId} registered in Polar | ` +
-        `status=${res.status} polarUserId=${parsed['user-id']}`,
+        `status=${res.status} polarUserId=${parsed['polar-user-id']}`,
     );
 
-    return parsed['user-id'];
+    return parsed['polar-user-id'];
   }
 
   /**

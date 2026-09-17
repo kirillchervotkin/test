@@ -1,3 +1,4 @@
+import { BaseExceptionFilter, HttpAdapterHost } from '@nestjs/core';
 import {
   Catch,
   ExceptionFilter,
@@ -36,6 +37,7 @@ import { DbForeignKeyViolationException } from '../exceptions/db-foreign-key-vio
 export class DbConstraintExceptionFilter implements ExceptionFilter {
   constructor(
     private readonly logger: Logger,
+    private readonly httpAdapterHost: HttpAdapterHost,
     private readonly exceptionUtils: ExceptionUtilsService,
     private readonly i18n: I18nService,
   ) {}
@@ -69,12 +71,16 @@ export class DbConstraintExceptionFilter implements ExceptionFilter {
       }
     }
 
-    // If after all checks it is not one of our constraint exceptions, rethrow
+    // Delegate unrelated exceptions to Nest instead of rejecting the filter promise.
     if (
       !(targetError instanceof DbUniqueViolationException) &&
       !(targetError instanceof DbForeignKeyViolationException)
     ) {
-      throw error;
+      new BaseExceptionFilter(this.httpAdapterHost.httpAdapter).catch(
+        error,
+        host,
+      );
+      return;
     }
 
     // ---- Now we can work with the target exception ----

@@ -87,7 +87,12 @@ export class WebhookController {
         continue;
       }
 
-      await this.processEvent(polarEvent, messageId);
+      try {
+        await this.processEvent(polarEvent, messageId);
+      } catch {
+        // Ignore failed events and continue processing the batch.
+        continue;
+      }
     }
   }
 

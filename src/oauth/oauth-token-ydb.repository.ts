@@ -1,3 +1,8 @@
+import { Uuid, Text, TextType } from '@ydbjs/value/primitive';
+import { Optional } from '@ydbjs/value/optional';
+
+const optionalText = (value?: string | null) =>
+  new Optional(value == null ? null : new Text(value), new TextType());
 import { Injectable, Inject } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { query } from '@ydbjs/query';
@@ -27,37 +32,39 @@ export class OAuthTokenYdbRepository {
     const id = uuidv4();
     const now = new Date();
 
-    // Удаляем старые токены
-    await this.sql`
+    await this.sql.begin(async (tx) => {
+      // Удаляем старые токены
+      await tx`
       DELETE FROM oauth_tokens
-      WHERE user_id = ${data.userId} AND service_name = ${data.serviceName}
+      WHERE user_id = ${new Uuid(data.userId)} AND service_name = ${data.serviceName}
     `;
 
-    // Вставляем новый токен
-    await this.sql`
+      // Вставляем новый токен
+      await tx`
       INSERT INTO oauth_tokens (
         id, service_name, user_id, encrypted_access_token,
         external_user_id, iv_access, auth_tag_access,
         encrypted_refresh_token, iv_refresh, auth_tag_refresh,
         expires_at, scope, created_at, updated_at, is_revoked
       ) VALUES (
-        ${id},
+        ${new Uuid(id)},
         ${data.serviceName},
-        ${data.userId},
+        ${new Uuid(data.userId)},
         ${data.encryptedAccessToken},
-        ${data.externalUserId ?? null},
+        ${optionalText(data.externalUserId)},
         ${data.ivAccess},
         ${data.authTagAccess},
-        ${data.encryptedRefreshToken ?? null},
-        ${data.ivRefresh ?? null},
-        ${data.authTagRefresh ?? null},
+        ${optionalText(data.encryptedRefreshToken)},
+        ${optionalText(data.ivRefresh)},
+        ${optionalText(data.authTagRefresh)},
         ${data.expiresAt},
-        ${data.scope ?? null},
+        ${optionalText(data.scope)},
         ${now},
         ${now},
         ${false}
       )
     `;
+    });
 
     return (await this.findById(id))!;
   }
@@ -67,9 +74,9 @@ export class OAuthTokenYdbRepository {
     userId: string,
     serviceName: string,
   ): Promise<OAuthToken | null> {
-    const result: unknown[] = await this.sql`
+    const [result] = await this.sql`
       SELECT * FROM oauth_tokens
-      WHERE user_id = ${userId}
+      WHERE user_id = ${new Uuid(userId)}
         AND service_name = ${serviceName}
         AND is_revoked = false
         AND expires_at > ${new Date()}
@@ -85,9 +92,9 @@ export class OAuthTokenYdbRepository {
     userId: string,
     serviceName: string,
   ): Promise<OAuthToken | null> {
-    const result: unknown[] = await this.sql`
+    const [result] = await this.sql`
       SELECT * FROM oauth_tokens
-      WHERE user_id = ${userId}
+      WHERE user_id = ${new Uuid(userId)}
         AND service_name = ${serviceName}
         AND is_revoked = false
         AND encrypted_refresh_token IS NOT NULL
@@ -103,7 +110,7 @@ export class OAuthTokenYdbRepository {
     await this.sql`
       UPDATE oauth_tokens
       SET is_revoked = true, updated_at = ${new Date()}
-      WHERE user_id = ${userId} AND service_name = ${serviceName}
+      WHERE user_id = ${new Uuid(userId)} AND service_name = ${serviceName}
     `;
   }
 
@@ -123,7 +130,7 @@ export class OAuthTokenYdbRepository {
           auth_tag_access = ${authTagAccess},
           expires_at = ${expiresAt},
           updated_at = ${new Date()}
-      WHERE user_id = ${userId} AND service_name = ${serviceName}
+      WHERE user_id = ${new Uuid(userId)} AND service_name = ${serviceName}
     `;
   }
 
@@ -132,9 +139,9 @@ export class OAuthTokenYdbRepository {
     userId: string,
     serviceName: string,
   ): Promise<string | null> {
-    const result: unknown[] = await this.sql`
+    const [result] = await this.sql`
       SELECT external_user_id FROM oauth_tokens
-      WHERE user_id = ${userId}
+      WHERE user_id = ${new Uuid(userId)}
         AND service_name = ${serviceName}
         AND is_revoked = false
       ORDER BY expires_at DESC
@@ -152,7 +159,7 @@ export class OAuthTokenYdbRepository {
     externalUserId: string,
     serviceName: string,
   ): Promise<string | null> {
-    const result: unknown[] = await this.sql`
+    const [result] = await this.sql`
       SELECT user_id FROM oauth_tokens
       WHERE external_user_id = ${externalUserId}
         AND service_name = ${serviceName}
@@ -174,14 +181,14 @@ export class OAuthTokenYdbRepository {
     await this.sql`
       UPDATE oauth_tokens
       SET external_user_id = ${externalUserId}, updated_at = ${new Date()}
-      WHERE user_id = ${userId} AND service_name = ${serviceName}
+      WHERE user_id = ${new Uuid(userId)} AND service_name = ${serviceName}
     `;
   }
 
   /** Вспомогательный метод поиска по id */
   private async findById(id: string): Promise<OAuthToken | null> {
-    const result: unknown[] = await this.sql`
-      SELECT * FROM oauth_tokens WHERE id = ${id}
+    const [result] = await this.sql`
+      SELECT * FROM oauth_tokens WHERE id = ${new Uuid(id)}
     `;
     const row = result[0] as Record<string, unknown> | undefined;
     return row ? this.mapRowToToken(row) : null;

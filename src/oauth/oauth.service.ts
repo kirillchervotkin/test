@@ -24,6 +24,7 @@ export class OauthService {
     if (providerType === 'polar') {
       const queryParams = new URLSearchParams({
         response_type: 'code',
+        redirect_uri: this.polarConfig.redirectUri,
         client_id: this.polarConfig.clientId,
         state: state,
       });
@@ -56,6 +57,7 @@ export class OauthService {
     const grantType: string = 'authorization_code';
     data.append('grant_type', grantType);
     data.append('code', code);
+    data.append('redirect_uri', this.polarConfig.redirectUri);
     data.append('state', state);
 
     const config = {

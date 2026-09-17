@@ -495,7 +495,10 @@ export const RegisterUserRequestSchema = z.object({
  * Polar возвращает внутренний user-id, совпадающий с x_user_id из OAuth.
  */
 export const RegisterUserResponseSchema = z.object({
-  'user-id': z.string(),
+  'polar-user-id': z
+    .union([z.number().int().positive(), z.string().regex(/^\d+$/)])
+    .transform(String),
+  'member-id': z.string().optional(),
 });
 
 // ─── Типы ───────────────────────────────────────────────────
