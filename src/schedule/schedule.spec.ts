@@ -30,8 +30,33 @@ import type {
   Match,
 } from './entities/types/schedule.types.js';
 
+const uuid = (n: number) =>
+  `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 class MemoryStore implements ScheduleStore {
   data: Record<Table, Map<string, unknown>> = {
+    cities: new Map([
+      [
+        uuid(1),
+        {
+          id: uuid(1),
+          name: 'Город',
+          createdAt: '2026-01-01',
+          updatedAt: '2026-01-01',
+        },
+      ],
+    ]),
+    teams: new Map(
+      Array.from({ length: 256 }, (_, i) => [
+        uuid(i + 1),
+        {
+          id: uuid(i + 1),
+          name: 'Команда',
+          cityId: uuid(1),
+          createdAt: '2026-01-01',
+          updatedAt: '2026-01-01',
+        },
+      ]),
+    ),
     tournaments: new Map(),
     stages: new Map(),
     matches: new Map(),
@@ -127,7 +152,7 @@ async function fixture(
       groupName: null,
       slotName: `Слот ${i + 1}`,
       seed: i + 1,
-      teamId: String(i + 100),
+      teamId: uuid(i + 100),
     });
   const gen = new ScheduleGeneratorService(repo, integrity),
     standings = new StandingsService(repo),
@@ -155,14 +180,14 @@ describe('Бергер', () => {
 describe('Календарь и резолвер', () => {
   it('генерирует один раз и откатывает выход за диапазон дат', async () => {
     const { db, gen } = await fixture('ROUND_ROBIN', 4);
-    await gen.generate('1', { cityId: '1' });
-    await expect(gen.generate('1', { cityId: '1' })).rejects.toBeInstanceOf(
+    await gen.generate('1', { cityId: uuid(1) });
+    await expect(gen.generate('1', { cityId: uuid(1) })).rejects.toBeInstanceOf(
       ConflictException,
     );
     const second = await fixture('ROUND_ROBIN', 4);
     await expect(
       second.gen.generate('1', {
-        cityId: '1',
+        cityId: uuid(1),
         firstMatchDate: '2028-12-31',
         intervalDays: 2,
       }),
@@ -175,7 +200,7 @@ describe('Календарь и резолвер', () => {
         const { db, gen, resolver } = await fixture(format, n, {
           grandFinalReset: true,
         });
-        const matches = await gen.generate('1', { cityId: '1' });
+        const matches = await gen.generate('1', { cityId: uuid(1) });
         expect(matches.length).toBeGreaterThanOrEqual(n - 1);
         for (let pass = 0; pass < 50; pass++) {
           await resolver.resolve('2');
@@ -206,7 +231,7 @@ describe('Календарь и резолвер', () => {
     const { db, repo, gen, resolver } = await fixture('SINGLE_ELIM', 4, {
       legsPerRound: 2,
     });
-    await gen.generate('1', { cityId: '1' });
+    await gen.generate('1', { cityId: uuid(1) });
     await new StageService(repo, integrity).update('2', { name: 'Новое имя' });
     const stage = await db.get('stages', '2');
     expect(stage.name).toBe('Новое имя');
@@ -215,8 +240,8 @@ describe('Календарь и резолвер', () => {
       const match = await db.get('matches', id);
       await db.save('matches', {
         ...match,
-        homeScore: match.homeTeamId === '100' ? 3 : 0,
-        awayScore: match.awayTeamId === '100' ? 3 : 0,
+        homeScore: match.homeTeamId === uuid(100) ? 3 : 0,
+        awayScore: match.awayTeamId === uuid(100) ? 3 : 0,
       });
     }
     await resolver.resolve('2');
@@ -241,7 +266,7 @@ describe('Календарь и резолвер', () => {
         ],
       },
     });
-    await expect(gen.generate('1', { cityId: '1' })).rejects.toBeInstanceOf(
+    await expect(gen.generate('1', { cityId: uuid(1) })).rejects.toBeInstanceOf(
       ConflictException,
     );
     expect(await db.list('matches')).toHaveLength(0);
@@ -250,7 +275,7 @@ describe('Календарь и резолвер', () => {
     const { db, gen, resolver } = await fixture('SINGLE_ELIM', 4, {
       legsPerRound: 2,
     });
-    await gen.generate('1', { cityId: '1' });
+    await gen.generate('1', { cityId: uuid(1) });
     const stage = await db.get('stages', '2'),
       [last, ids] = Object.entries(stage.settings!.generated!.series)[0];
     const a = await db.get('matches', ids[0]),
@@ -266,7 +291,7 @@ describe('Календарь и резолвер', () => {
     const { db, gen, resolver } = await fixture('DOUBLE_ELIM', 2, {
       grandFinalReset: true,
     });
-    await gen.generate('1', { cityId: '1' });
+    await gen.generate('1', { cityId: uuid(1) });
     const stage = await db.get('stages', '2'),
       reset = stage.settings!.generated!.reset!;
     const opening = (await db.list('matches')).find(
@@ -286,7 +311,7 @@ describe('Календарь и резолвер', () => {
       pointsForDraw: 2,
       tieBreakers: ['headToHead', 'goalDifference'],
     });
-    await gen.generate('1', { cityId: '1' });
+    await gen.generate('1', { cityId: uuid(1) });
     for (const m of await db.list('matches'))
       await db.save('matches', { ...m, homeScore: 0, awayScore: 0 });
     const table = await standings.calculate('2');
@@ -322,7 +347,7 @@ describe('Календарь и резолвер', () => {
       schema: {
         name: 'Кубок',
         type: 'CUP',
-        cityId: '1',
+        cityId: uuid(1),
         stages: [
           {
             key: 'group',
@@ -330,8 +355,8 @@ describe('Календарь и резолвер', () => {
             type: 'GROUP',
             format: 'ROUND_ROBIN',
             slots: [
-              { name: 'A', teamId: '100' },
-              { name: 'B', teamId: '101' },
+              { name: 'A', teamId: uuid(100) },
+              { name: 'B', teamId: uuid(101) },
             ],
           },
           {

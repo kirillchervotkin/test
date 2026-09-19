@@ -1,6 +1,10 @@
+import { citySchema } from '../../city/entities/city.schema.js';
+import { teamSchema } from '../../team/entities/team.schema.js';
 // Trusted relational schema metadata shared by the repository and mapper.
 import type { Table } from './types/schedule.types.js';
 export const scheduleSchema: Record<Table, Record<string, string>> = {
+  cities: citySchema,
+  teams: teamSchema,
   tournaments: {
     id: 'Uint64',
     name: 'Utf8',
@@ -30,7 +34,7 @@ export const scheduleSchema: Record<Table, Record<string, string>> = {
     stageId: 'Uint64',
     groupName: 'Utf8?',
     slotName: 'Utf8',
-    teamId: 'Uint64?',
+    teamId: 'Uuid?',
     seed: 'Uint32?',
     createdAt: 'Timestamp',
     updatedAt: 'Timestamp',
@@ -40,11 +44,11 @@ export const scheduleSchema: Record<Table, Record<string, string>> = {
     tournamentId: 'Uint64',
     stageId: 'Uint64?',
     matchDate: 'Timestamp',
-    cityId: 'Uint64',
+    cityId: 'Uuid',
     homeSlotId: 'Uint64?',
     awaySlotId: 'Uint64?',
-    homeTeamId: 'Uint64?',
-    awayTeamId: 'Uint64?',
+    homeTeamId: 'Uuid?',
+    awayTeamId: 'Uuid?',
     homeScore: 'Int32?',
     awayScore: 'Int32?',
     createdAt: 'Timestamp',
@@ -59,7 +63,7 @@ export const scheduleSchema: Record<Table, Record<string, string>> = {
     sourceGroupName: 'Utf8?',
     sourcePosition: 'Uint32?',
     sourceMatchId: 'Uint64?',
-    resolvedTeamId: 'Uint64?',
+    resolvedTeamId: 'Uuid?',
     createdAt: 'Timestamp',
     updatedAt: 'Timestamp',
   },

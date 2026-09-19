@@ -1,4 +1,10 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { translateUniqueError } from '../../common/references/ydb-constraint-errors.js';
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  HttpException,
+} from '@nestjs/common';
 import type { QueryClient, SQL } from '@ydbjs/query';
 import {
   Bool,
@@ -8,6 +14,7 @@ import {
   Timestamp,
   Uint32,
   Uint64,
+  Uuid,
   Date as YdbDate,
 } from '@ydbjs/value/primitive';
 import { randomBytes } from 'node:crypto';
@@ -44,16 +51,30 @@ export class ScheduleRepository {
   async transaction<T>(
     action: (store: ScheduleStore) => Promise<T>,
   ): Promise<T> {
-    return this.sql.begin(
-      { isolation: 'serializableReadWrite', idempotent: false },
-      async (tx) => action(new YdbScheduleStore(this.sql, tx)),
-    );
+    return this.sql
+      .begin(
+        { isolation: 'serializableReadWrite', idempotent: false },
+        async (tx) => action(new YdbScheduleStore(this.sql, tx)),
+      )
+      .catch((error: unknown) => this.rethrowDomainError(error));
   }
   async read<T>(action: (store: ScheduleStore) => Promise<T>): Promise<T> {
-    return this.sql.begin(
-      { isolation: 'snapshotReadOnly', idempotent: true },
-      async (tx) => action(new YdbScheduleStore(this.sql, tx)),
-    );
+    return this.sql
+      .begin({ isolation: 'snapshotReadOnly', idempotent: true }, async (tx) =>
+        action(new YdbScheduleStore(this.sql, tx)),
+      )
+      .catch((error: unknown) => this.rethrowDomainError(error));
+  }
+  private async rethrowDomainError(error: unknown): Promise<never> {
+    // The SDK wraps callback errors after rollback; preserve domain HTTP statuses.
+    let cause = error;
+    while (
+      cause instanceof Error &&
+      cause.message === 'Transaction failed.' &&
+      cause.cause
+    )
+      cause = cause.cause;
+    return Promise.reject(cause instanceof HttpException ? cause : error);
   }
 }
 
@@ -64,11 +85,11 @@ class YdbScheduleStore implements ScheduleStore {
   ) {}
   async stamp(): Promise<Entity> {
     const now = new Date().toISOString();
-    return {
+    return Promise.resolve({
       id: (randomBytes(8).readBigUInt64BE() || 1n).toString(),
       createdAt: now,
       updatedAt: now,
-    };
+    });
   }
   async get<K extends Table>(table: K, id: string): Promise<Tables[K]> {
     const rows = await this.list(table, { id } as Partial<Tables[K]>);
@@ -121,13 +142,21 @@ class YdbScheduleStore implements ScheduleStore {
       (key) => this.sql.fragment`${this.sql.identifier(key)}`,
     );
     const command = this.sql.unsafe(insert ? 'INSERT' : 'UPSERT');
-    await this
-      .tx`${command} INTO ${this.sql.identifier(table)} (${this.sql.join(names, ', ')}) VALUES (${this.sql.join(values, ', ')})`;
+    try {
+      await this
+        .tx`${command} INTO ${this.sql.identifier(table)} (${this.sql.join(names, ', ')}) VALUES (${this.sql.join(values, ', ')})`;
+    } catch (error) {
+      await translateUniqueError(
+        error,
+        [{ dbField: 'id', value: value.id }],
+        `pk_${table}`,
+      );
+    }
     return value;
   }
   async remove<K extends Table>(table: K, id: string): Promise<void> {
     await this
-      .tx`DELETE FROM ${this.sql.identifier(table)} WHERE id = ${new Uint64(BigInt(id))}`;
+      .tx`DELETE FROM ${this.sql.identifier(table)} WHERE id = ${await this.value(table, 'id', id)}`;
   }
   private async value(table: Table, key: string, value: unknown) {
     const kind = scheduleSchema[table][key]?.replace('?', '');
@@ -138,6 +167,8 @@ class YdbScheduleStore implements ScheduleStore {
         return new Uint32(Number(value));
       case 'Int32':
         return new Int32(Number(value));
+      case 'Uuid':
+        return new Uuid(String(value));
       case 'Utf8':
         return new Text(String(value));
       case 'Bool':

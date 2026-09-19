@@ -6,7 +6,7 @@ import {
   Delete,
   Body,
   Param,
-  ParseIntPipe,
+  ParseUUIDPipe,
   HttpCode,
   HttpStatus,
   Inject,
@@ -22,6 +22,8 @@ import {
   ApiNotFoundResponse,
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import type { TeamService } from './interfaces/teamService.interface.js';
 import { CreateTeamDto } from './dto/createTeam.dto.js';
@@ -33,6 +35,10 @@ import { JwtAuthGuard } from '../auth/guards/auth.guard.js';
 @ApiTags('Команды')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
+@ApiConflictResponse({
+  description: 'Дубликат или запись используется связанными сущностями',
+})
+@ApiUnprocessableEntityResponse({ description: 'Ошибка проверки полей или ссылка на несуществующую запись; application/problem+json' })
 @Controller('teams')
 export class TeamController {
   constructor(
@@ -67,8 +73,8 @@ export class TeamController {
   @ApiParam({
     name: 'id',
     description: 'ID команды',
-    type: Number,
-    example: 1,
+    type: String,
+    example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @ApiOkResponse({
     description: 'Информация о команде получена успешно',
@@ -76,7 +82,7 @@ export class TeamController {
   })
   @ApiNotFoundResponse({ description: 'Команда не найдена' })
   async findOne(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseUUIDPipe) id: string,
   ): Promise<TeamResponseDto> {
     return await this.teamService.findOne(id);
   }
@@ -86,8 +92,8 @@ export class TeamController {
   @ApiParam({
     name: 'id',
     description: 'ID команды',
-    type: Number,
-    example: 1,
+    type: String,
+    example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @ApiBody({ type: UpdateTeamDto })
   @ApiOkResponse({
@@ -97,7 +103,7 @@ export class TeamController {
   @ApiNotFoundResponse({ description: 'Команда не найдена' })
   @ApiBadRequestResponse({ description: 'Неверные входные данные' })
   async update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() updateTeamDto: UpdateTeamDto,
   ): Promise<TeamResponseDto> {
     return await this.teamService.update(id, updateTeamDto);
@@ -108,8 +114,8 @@ export class TeamController {
   @ApiParam({
     name: 'id',
     description: 'ID команды',
-    type: Number,
-    example: 1,
+    type: String,
+    example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @ApiOkResponse({
     description: 'Команда успешно удалена',
@@ -120,7 +126,7 @@ export class TeamController {
   @ApiNotFoundResponse({ description: 'Команда не найдена' })
   @HttpCode(HttpStatus.OK)
   async remove(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseUUIDPipe) id: string,
   ): Promise<{ message: string }> {
     await this.teamService.remove(id);
     return { message: `Команда с ID ${id} успешно удалена` };

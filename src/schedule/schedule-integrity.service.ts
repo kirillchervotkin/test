@@ -1,9 +1,9 @@
+import { ReferenceValidation } from '../common/references/reference-validation.js';
 import {
   BadRequestException,
   ConflictException,
   Inject,
   Injectable,
-  NotFoundException,
 } from '@nestjs/common';
 import type { CityService } from '../city/interfaces/cityService.interface.js';
 import { CITY_SERVICE } from '../city/tokens.js';
@@ -23,22 +23,26 @@ export class ScheduleIntegrityService {
     @Inject(TEAM_SERVICE) private readonly teams: TeamService,
     @Inject(CITY_SERVICE) private readonly cities: CityService,
   ) {}
-  async external(kind: 'team' | 'city', id: string): Promise<void> {
-    await ScheduleMapper.id(id);
-    const numeric = Number(id);
-    if (!Number.isSafeInteger(numeric))
-      throw new BadRequestException(
-        'Существующие справочники принимают ID не больше Number.MAX_SAFE_INTEGER',
+  async external(
+    kind: 'team' | 'city',
+    id: string,
+    db?: ScheduleStore,
+    field?: string,
+  ): Promise<void> {
+    const key = await ReferenceValidation.id(id);
+    if (db) {
+      await ReferenceValidation.exists(
+        db,
+        kind === 'team' ? 'teams' : 'cities',
+        key,
+        field ?? (kind === 'team' ? 'teamId' : 'cityId'),
       );
-    try {
-      if (kind === 'team') await this.teams.findOne(numeric);
-      else await this.cities.findOne(numeric);
-    } catch {
-      throw new NotFoundException(
-        kind === 'team' ? 'Команда не найдена' : 'Город не найден',
-      );
+      return;
     }
+    if (kind === 'team') await this.teams.findOne(key);
+    else await this.cities.findOne(key);
   }
+
   async owned<K extends 'stages' | 'matches' | 'tournament_team_slots'>(
     db: ScheduleStore,
     table: K,
@@ -55,7 +59,7 @@ export class ScheduleIntegrityService {
     const day = new Date(m.matchDate).toISOString().slice(0, 10);
     if (day < tournament.startDate || day > tournament.endDate)
       throw new BadRequestException('Дата матча выходит за даты турнира');
-    await this.external('city', m.cityId);
+    await this.external('city', m.cityId, db);
     if (m.stageId) await this.owned(db, 'stages', m.stageId, m.tournamentId);
     for (const side of ['home', 'away'] as const) {
       const slotId = m[`${side}SlotId`];
@@ -71,7 +75,7 @@ export class ScheduleIntegrityService {
         m[`${side}TeamId`] = slot.teamId;
       }
       const team = m[`${side}TeamId`];
-      if (team) await this.external('team', team);
+      if (team) await this.external('team', team, db, `${side}TeamId`);
     }
     if (
       (m.homeSlotId && m.homeSlotId === m.awaySlotId) ||

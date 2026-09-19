@@ -79,7 +79,7 @@ export class TournamentFactoryService {
             names.add(slot.name);
             if (slot.teamId) {
               teams.add(slot.teamId);
-              await this.integrity.external('team', slot.teamId);
+              await this.integrity.external('team', slot.teamId, db);
             }
             await db.save(
               'tournament_team_slots',

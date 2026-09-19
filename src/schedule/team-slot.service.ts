@@ -26,7 +26,7 @@ export class TeamSlotService {
         throw new ConflictException('Слоты разрешены только конечным этапам');
       if (stage.settings?.generated)
         throw new ConflictException('Нельзя добавлять слоты после генерации');
-      if (data.teamId) await this.integrity.external('team', data.teamId);
+      if (data.teamId) await this.integrity.external('team', data.teamId, db);
       const slots = await db.list('tournament_team_slots', {
         stageId: stage.id,
       });
@@ -59,8 +59,8 @@ export class TeamSlotService {
     });
   }
   async assign(id: string, teamId: string): Promise<TeamSlot> {
-    await this.integrity.external('team', teamId);
     return this.repository.transaction(async (db) => {
+      await this.integrity.external('team', teamId, db);
       const slot = await db.get('tournament_team_slots', id),
         matches = await db.list('matches', { tournamentId: slot.tournamentId });
       const affected = matches.filter(

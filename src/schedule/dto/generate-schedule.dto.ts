@@ -1,3 +1,5 @@
+import { IsUUID } from 'class-validator';
+import { Constraint } from '../../common/decorators/unique.decorator.js';
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsInt,
@@ -5,7 +7,6 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  Matches,
   Max,
   Min,
 } from 'class-validator';
@@ -14,7 +15,11 @@ export class GenerateScheduleDto {
   @ApiProperty({ description: 'ID города' })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^[1-9]\d{0,19}$/, { message: 'Ожидается строка Uint64' })
+  @IsUUID('4')
+  @Constraint({
+    dbField: 'cityId',
+    messages: { foreignKey: 'validation.CITY_NOT_FOUND' },
+  })
   cityId!: string;
 
   @ApiProperty({

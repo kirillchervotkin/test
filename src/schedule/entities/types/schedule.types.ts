@@ -1,3 +1,5 @@
+import type { City } from '../../../city/entities/types/city.types.js';
+import type { Team } from '../../../team/entities/types/team.types.js';
 export type Id = string;
 export type Format = 'ROUND_ROBIN' | 'SINGLE_ELIM' | 'DOUBLE_ELIM';
 export type StageType = 'STAGE' | 'GROUP' | 'ROUND' | 'PLAYOFF';
@@ -108,6 +110,8 @@ export interface Template extends Entity {
   schema: TemplateSchema;
 }
 export interface Tables {
+  cities: City;
+  teams: Team;
   tournaments: Tournament;
   stages: Stage;
   tournament_team_slots: TeamSlot;

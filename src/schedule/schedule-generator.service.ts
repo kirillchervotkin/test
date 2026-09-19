@@ -43,7 +43,7 @@ export class ScheduleGeneratorService {
     options: GenerateOptions,
   ): Promise<Match[]> {
     const tournament = await db.get('tournaments', tournamentId);
-    await this.integrity.external('city', options.cityId);
+    await this.integrity.external('city', options.cityId, db);
     if ((await db.list('matches', { tournamentId })).length)
       throw new ConflictException('Календарь уже существует');
     const stages = (await db.list('stages', { tournamentId })).sort(

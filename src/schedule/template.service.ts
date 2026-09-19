@@ -1,3 +1,4 @@
+import { ReferenceValidation } from '../common/references/reference-validation.js';
 import { ConflictException, Injectable } from '@nestjs/common';
 import { ScheduleSettings } from './algorithms/settings.js';
 import type { CreateTemplateDto } from './dto/create-template.dto.js';
@@ -10,8 +11,9 @@ export class TemplateService {
   constructor(private readonly repository: ScheduleRepository) {}
   async create(data: CreateTemplateDto): Promise<Template> {
     const schema = await ScheduleSettings.template(data.schema);
-    return this.repository.transaction(async (db) =>
-      db.save(
+    return this.repository.transaction(async (db) => {
+      await ReferenceValidation.template(db, schema);
+      return db.save(
         'tournament_templates',
         {
           ...(await db.stamp()),
@@ -20,8 +22,8 @@ export class TemplateService {
           description: data.description ?? null,
         },
         true,
-      ),
-    );
+      );
+    });
   }
   async findAll(): Promise<Template[]> {
     return this.repository.read((db) => db.list('tournament_templates'));
@@ -35,6 +37,7 @@ export class TemplateService {
       const schema = data.schema
         ? await ScheduleSettings.template(data.schema)
         : old.schema;
+      await ReferenceValidation.template(db, schema);
       if (
         data.schema &&
         data.version !== undefined &&

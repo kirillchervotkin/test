@@ -6,7 +6,7 @@ import {
   Delete,
   Body,
   Param,
-  ParseIntPipe,
+  ParseUUIDPipe,
   HttpCode,
   HttpStatus,
   Inject,
@@ -24,6 +24,8 @@ import {
   ApiNotFoundResponse,
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { CreateCityDto } from './dto/createCity.dto.js';
 import { CityResponseDto } from './dto/cityResponse.dto.js';
@@ -35,6 +37,10 @@ import { JwtAuthGuard } from '../auth/guards/auth.guard.js';
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
 @ApiTags('Города')
+@ApiConflictResponse({
+  description: 'Дубликат или запись используется связанными сущностями',
+})
+@ApiUnprocessableEntityResponse({ description: 'Ошибка проверки полей или ссылка на несуществующую запись; application/problem+json' })
 @Controller('cities')
 export class CityController {
   constructor(
@@ -78,8 +84,8 @@ export class CityController {
   @ApiParam({
     name: 'id',
     description: 'ID города',
-    type: Number,
-    example: 1,
+    type: String,
+    example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @ApiOkResponse({
     description: 'Информация о городе получена успешно',
@@ -87,7 +93,7 @@ export class CityController {
   })
   @ApiNotFoundResponse({ description: 'Город не найден' })
   async findOne(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseUUIDPipe) id: string,
   ): Promise<CityResponseDto> {
     return this.cityService.findOne(id);
   }
@@ -97,8 +103,8 @@ export class CityController {
   @ApiParam({
     name: 'id',
     description: 'ID города',
-    type: Number,
-    example: 1,
+    type: String,
+    example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @ApiBody({ type: UpdateCityDto })
   @ApiOkResponse({
@@ -108,7 +114,7 @@ export class CityController {
   @ApiNotFoundResponse({ description: 'Город не найден' })
   @ApiBadRequestResponse({ description: 'Неверные входные данные' })
   async update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() updateCityDto: UpdateCityDto,
   ): Promise<CityResponseDto> {
     return this.cityService.update(id, updateCityDto);
@@ -119,15 +125,15 @@ export class CityController {
   @ApiParam({
     name: 'id',
     description: 'ID города',
-    type: Number,
-    example: 1,
+    type: String,
+    example: '550e8400-e29b-41d4-a716-446655440000',
   })
   @ApiOkResponse({
     description: 'Город успешно удален',
   })
   @ApiNotFoundResponse({ description: 'Город не найден' })
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
+  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     await this.cityService.remove(id);
   }
 }

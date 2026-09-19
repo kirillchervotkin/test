@@ -1,20 +1,20 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsInt, Min } from 'class-validator';
 
 export class TeamResponseDto {
-  @ApiProperty({ description: 'ID команды', example: 1 })
-  id: number;
+  @ApiProperty({
+    description: 'ID команды',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  id: string;
 
   @ApiProperty({ description: 'Название команды', example: 'Спартак' })
   name: string;
 
   @ApiProperty({
-    description: 'Место проведения матча',
-    example: 'Санкт-Петербург',
+    description: 'UUID города',
+    format: 'uuid',
   })
-  @IsInt()
-  @Min(1)
-  cityId: number;
+  cityId: string;
 
   @ApiProperty({
     description: 'Дата создания',

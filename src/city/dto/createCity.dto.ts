@@ -1,8 +1,10 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsNotEmpty, MaxLength } from 'class-validator';
 import { Constraint } from '../../common/decorators/unique.decorator.js';
 import { vMsg } from '../../common/utils/validation-message.js';
 
 export class CreateCityDto {
+  @ApiProperty({ description: 'Название города', example: 'Москва' })
   @Constraint({
     messages: {
       unique: 'validation.UNIQUE_CITY',

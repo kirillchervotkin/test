@@ -6,5 +6,10 @@
   "UNIQUE": "Value '{value}' for field '{field}' is already taken.",
   "UNIQUE_COMPOSITE": "Combination of fields already exists.",
   "MIN": "Value must be at least {constraints.0}.",
-  "IS_INT": "Value must be an integer."
+  "IS_INT": "Value must be an integer.",
+  "UNIQUE_TEAM_CITY": "A team with this name already exists in this city.",
+  "CITY_NOT_FOUND": "The selected city does not exist.",
+  "TEAM_NOT_FOUND": "The selected team does not exist.",
+  "IS_UUID": "Expected a UUID v4",
+  "TEMPLATE_REFERENCE_NOT_FOUND": "The template references a missing city or team."
 }

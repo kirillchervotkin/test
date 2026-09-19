@@ -1,3 +1,4 @@
+import { Constraint } from '../../common/decorators/unique.decorator.js';
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsBoolean,
@@ -40,5 +41,6 @@ export class CreateTemplateDto {
 
   @ApiProperty({ type: Object, description: 'Схема турнира' })
   @IsObject()
+  @Constraint({ dbField: 'schema', messages: { foreignKey: 'validation.TEMPLATE_REFERENCE_NOT_FOUND' } })
   schema!: TemplateSchema;
 }

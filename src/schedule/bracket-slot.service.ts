@@ -40,8 +40,8 @@ export class BracketSlotService {
     });
   }
   async override(id: string, teamId: string): Promise<BracketSlot> {
-    await this.integrity.external('team', teamId);
     return this.repository.transaction(async (db) => {
+      await this.integrity.external('team', teamId, db, 'resolvedTeamId');
       const rule = await db.get('bracket_slots', id);
       if (rule.resolvedTeamId && rule.resolvedTeamId !== teamId)
         throw new ConflictException(

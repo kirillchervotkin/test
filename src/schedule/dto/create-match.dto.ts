@@ -1,3 +1,5 @@
+import { IsUUID } from 'class-validator';
+import { Constraint } from '../../common/decorators/unique.decorator.js';
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsInt,
@@ -30,7 +32,11 @@ export class CreateMatchDto {
   @ApiProperty({ description: 'ID города' })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^[1-9]\d{0,19}$/, { message: 'Ожидается строка Uint64' })
+  @IsUUID('4')
+  @Constraint({
+    dbField: 'cityId',
+    messages: { foreignKey: 'validation.CITY_NOT_FOUND' },
+  })
   cityId!: string;
 
   @ApiProperty({
@@ -66,7 +72,11 @@ export class CreateMatchDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @Matches(/^[1-9]\d{0,19}$/, { message: 'Ожидается строка Uint64' })
+  @IsUUID('4')
+  @Constraint({
+    dbField: 'homeTeamId',
+    messages: { foreignKey: 'validation.TEAM_NOT_FOUND' },
+  })
   homeTeamId?: string | null;
 
   @ApiProperty({
@@ -78,7 +88,11 @@ export class CreateMatchDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @Matches(/^[1-9]\d{0,19}$/, { message: 'Ожидается строка Uint64' })
+  @IsUUID('4')
+  @Constraint({
+    dbField: 'awayTeamId',
+    messages: { foreignKey: 'validation.TEAM_NOT_FOUND' },
+  })
   awayTeamId?: string | null;
 
   @ApiProperty({

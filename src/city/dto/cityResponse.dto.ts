@@ -1,8 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CityResponseDto {
-  @ApiProperty({ description: 'ID города', example: 1 })
-  id: number;
+  @ApiProperty({
+    description: 'ID города',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  id: string;
 
   @ApiProperty({ description: 'Название города', example: 'Москва' })
   name: string;

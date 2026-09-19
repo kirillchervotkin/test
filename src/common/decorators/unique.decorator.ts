@@ -35,10 +35,11 @@ export function Constraint(options: ConstraintOptions = {}): PropertyDecorator {
     );
 
     // Получаем существующий массив полей, приведя тип к ожидаемому
-    const existingFields: (string | symbol)[] =
-      (Reflect.getMetadata(CONSTRAINT_FIELDS_KEY, target) as
+    const existingFields: (string | symbol)[] = [
+      ...((Reflect.getMetadata(CONSTRAINT_FIELDS_KEY, target) as
         | (string | symbol)[]
-        | undefined) || [];
+        | undefined) || []),
+    ];
 
     if (!existingFields.includes(propertyKey)) {
       existingFields.push(propertyKey);

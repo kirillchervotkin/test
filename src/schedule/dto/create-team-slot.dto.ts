@@ -1,3 +1,5 @@
+import { IsUUID } from 'class-validator';
+import { Constraint } from '../../common/decorators/unique.decorator.js';
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsInt,
@@ -41,7 +43,11 @@ export class CreateTeamSlotDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @Matches(/^[1-9]\d{0,19}$/, { message: 'Ожидается строка Uint64' })
+  @IsUUID('4')
+  @Constraint({
+    dbField: 'teamId',
+    messages: { foreignKey: 'validation.TEAM_NOT_FOUND' },
+  })
   teamId?: string | null;
 
   @ApiProperty({

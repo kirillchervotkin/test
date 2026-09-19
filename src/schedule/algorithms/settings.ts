@@ -34,7 +34,7 @@ const settings = z
     dropToLowerBracket: z.boolean().optional(),
     grandFinalReset: z.boolean().optional(),
     qualification: z.array(rule).optional(),
-    decisions: z.record(id, id).optional(),
+    decisions: z.record(id, z.uuidv4()).optional(),
   })
   .strict();
 const stage: z.ZodType<TemplateStage> = z.lazy(() =>
@@ -51,7 +51,7 @@ const stage: z.ZodType<TemplateStage> = z.lazy(() =>
             .object({
               name: z.string().min(1),
               seed: z.number().int().positive().optional(),
-              teamId: id.optional(),
+              teamId: z.uuidv4().optional(),
             })
             .strict(),
         )
@@ -65,7 +65,7 @@ const template = z
   .object({
     name: z.string().min(1),
     type: z.enum(['LEAGUE', 'CUP', 'SUPER_CUP']),
-    cityId: id,
+    cityId: z.uuidv4(),
     intervalDays: z.number().int().positive().optional(),
     stages: z.array(stage).min(1),
   })

@@ -1,93 +1,46 @@
-import { Injectable } from '@nestjs/common';
-import { TeamResponseDto } from './dto/teamResponse.dto.js';
-import { CreateTeamDto } from './dto/createTeam.dto.js';
-import { UpdateTeamDto } from './dto/updateTeam.dto.js';
-import { TeamService } from './interfaces/teamService.interface.js';
-import { EntityNotFoundException } from '../common/exceptions/entityNotFound.exception.js';
-
-interface TeamStub {
-  id: number;
-  name: string;
-  cityId: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
+import { Injectable, Logger } from '@nestjs/common';
+import type { CreateTeamDto } from './dto/createTeam.dto.js';
+import type { UpdateTeamDto } from './dto/updateTeam.dto.js';
+import type { TeamResponseDto } from './dto/teamResponse.dto.js';
+import type { TeamService } from './interfaces/teamService.interface.js';
+import { TeamRepository } from './repository/team.repository.js';
+import { TeamMapper } from './mappers/team.mapper.js';
+import { ReferenceValidation as V } from '../common/references/reference-validation.js';
 @Injectable()
-export class TypeOrmTeamService implements TeamService {
-  private teams: TeamStub[] = [];
-  private nextId = 1;
-
-  create(createTeamDto: CreateTeamDto): Promise<TeamResponseDto> {
-    const now = new Date();
-
-    const team: TeamStub = {
-      id: this.nextId++,
-      name: createTeamDto.name,
-      cityId: createTeamDto.cityId,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    this.teams.push(team);
-    return Promise.resolve(this.mapToResponseDto(team));
+export class YdbTeamService implements TeamService {
+  private readonly logger = new Logger(YdbTeamService.name);
+  constructor(private readonly repository: TeamRepository) {}
+  async create(data: CreateTeamDto): Promise<TeamResponseDto> {
+    const name = await V.name(data.name);
+    const result = await TeamMapper.toDto(
+      await this.repository.save({ name, cityId: await V.id(data.cityId) }),
+    );
+    this.logger.log(`Создана команда ${result.id}`);
+    return result;
   }
-
-  findAll(): Promise<TeamResponseDto[]> {
-    const result = [...this.teams]
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-      .map((team) => this.mapToResponseDto(team));
-
-    return Promise.resolve(result);
+  async findAll(): Promise<TeamResponseDto[]> {
+    const rows = await this.repository.findAll();
+    rows.sort(
+      (a, b) => a.name.localeCompare(b.name, 'ru') || a.id.localeCompare(b.id),
+    );
+    return Promise.all(rows.map((row) => TeamMapper.toDto(row)));
   }
-
-  findOne(id: number): Promise<TeamResponseDto> {
-    const team = this.teams.find((t) => t.id === id);
-
-    if (!team) {
-      return Promise.reject(new EntityNotFoundException('Team', id));
-    }
-
-    return Promise.resolve(this.mapToResponseDto(team));
+  async findOne(id: string): Promise<TeamResponseDto> {
+    return TeamMapper.toDto(await this.repository.findById(await V.id(id)));
   }
-
-  update(id: number, updateTeamDto: UpdateTeamDto): Promise<TeamResponseDto> {
-    const team = this.teams.find((t) => t.id === id);
-
-    if (!team) {
-      return Promise.reject(new EntityNotFoundException('Team', id));
-    }
-
-    if (updateTeamDto.name !== undefined) {
-      team.name = updateTeamDto.name;
-    }
-    if (updateTeamDto.cityId !== undefined) {
-      team.cityId = updateTeamDto.cityId;
-    }
-
-    team.updatedAt = new Date();
-
-    return Promise.resolve(this.mapToResponseDto(team));
+  async update(id: string, data: UpdateTeamDto): Promise<TeamResponseDto> {
+    await V.id(id);
+    const fields: { name?: string; cityId?: string } = {};
+    if (data.name !== undefined) fields.name = await V.name(data.name);
+    if (data.cityId !== undefined) fields.cityId = await V.id(data.cityId);
+    const result = await TeamMapper.toDto(
+      await this.repository.save(fields, id),
+    );
+    this.logger.log(`Обновлена запись ${id}`);
+    return result;
   }
-
-  remove(id: number): Promise<void> {
-    const index = this.teams.findIndex((t) => t.id === id);
-
-    if (index === -1) {
-      return Promise.reject(new EntityNotFoundException('Team', id));
-    }
-
-    this.teams.splice(index, 1);
-    return Promise.resolve();
-  }
-
-  private mapToResponseDto(team: TeamStub): TeamResponseDto {
-    return {
-      id: team.id,
-      name: team.name,
-      cityId: team.cityId,
-      createdAt: team.createdAt.toISOString(),
-      updatedAt: team.updatedAt.toISOString(),
-    };
+  async remove(id: string): Promise<void> {
+    await this.repository.delete(await V.id(id));
+    this.logger.log(`Удалена запись ${id}`);
   }
 }
