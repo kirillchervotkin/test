@@ -12,7 +12,7 @@ export class InMemoryRatingService implements RatingService {
     {
       id: 1,
       assignmentId: 1,
-      matchId: 1,
+      matchId: '1',
       userId: 101,
       roleId: 1,
       rating: 9,
@@ -23,7 +23,7 @@ export class InMemoryRatingService implements RatingService {
     {
       id: 2,
       assignmentId: 2,
-      matchId: 1,
+      matchId: '1',
       userId: 102,
       roleId: 2,
       rating: 8,
@@ -34,7 +34,7 @@ export class InMemoryRatingService implements RatingService {
     {
       id: 3,
       assignmentId: 4,
-      matchId: 2,
+      matchId: '2',
       userId: 104,
       roleId: 1,
       rating: 7,
@@ -52,12 +52,12 @@ export class InMemoryRatingService implements RatingService {
   ) {}
 
   // Создает новую оценку для указанного назначения
-  create(
+  async create(
     assignmentId: number,
     createRatingDto: CreateRatingDto,
-  ): RatingResponseDto {
+  ): Promise<RatingResponseDto> {
     // Проверяем существование назначения
-    const assignment = this.assignmentService.findOne(assignmentId);
+    const assignment = await this.assignmentService.findOne(assignmentId);
 
     // Проверяем, существует ли уже оценка для этого назначения
     const existingRating = this.ratings.find(
@@ -232,7 +232,7 @@ export class InMemoryRatingService implements RatingService {
   }
 
   // Получает все оценки для указанного матча
-  findAllByMatchId(matchId: number): RatingResponseDto[] {
+  findAllByMatchId(matchId: string): RatingResponseDto[] {
     return this.ratings.filter((rating) => rating.matchId === matchId);
   }
 }

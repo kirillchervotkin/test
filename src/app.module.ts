@@ -11,7 +11,7 @@ import { ListModule } from './list/list.module.js';
 
 import { WebhookModule } from './webhook/webhook.module.js';
 import { AdminInitializationService } from './adminInit.service.js';
-import { TournamentModule } from './tournament/tournament.module.js';
+import { ScheduleModule } from './schedule/schedule.module.js';
 import { TeamModule } from './team/team.module.js';
 import { CityModule } from './city/city.module.js';
 import { GroupModule } from './group/group.module.js';
@@ -136,7 +136,7 @@ const __dirname = dirname(__filename);
     AnthropometryModule,
     WebhookModule,
     ReportModule,
-    TournamentModule,
+    ScheduleModule,
     TeamModule,
     CityModule,
     GroupModule,

@@ -1,0 +1,10 @@
+export { MATCHES_SERVICE } from '../match/tokens.js';
+export { TOURNAMENTS_SERVICE } from '../tournament/tokens.js';
+export const STAGES_SERVICE = Symbol('STAGES_SERVICE');
+export const TEAM_SLOTS_SERVICE = Symbol('TEAM_SLOTS_SERVICE');
+export const BRACKET_SLOTS_SERVICE = Symbol('BRACKET_SLOTS_SERVICE');
+export const BRACKET_RESOLVER_SERVICE = Symbol('BRACKET_RESOLVER_SERVICE');
+export const STANDINGS_SERVICE = Symbol('STANDINGS_SERVICE');
+export const SCHEDULE_GENERATOR_SERVICE = Symbol('SCHEDULE_GENERATOR_SERVICE');
+export const TEMPLATES_SERVICE = Symbol('TEMPLATES_SERVICE');
+export const TOURNAMENT_FACTORY_SERVICE = Symbol('TOURNAMENT_FACTORY_SERVICE');

@@ -4,8 +4,8 @@ export class AssignmentResponseDto {
   @ApiProperty({ description: 'ID назначения', example: 1 })
   id: number;
 
-  @ApiProperty({ description: 'ID матча', example: 1 })
-  matchId: number;
+  @ApiProperty({ description: 'ID матча Uint64', example: '1', type: String })
+  matchId: string;
 
   @ApiProperty({ description: 'ID пользователя', example: 1 })
   userId: number;

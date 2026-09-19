@@ -5,14 +5,14 @@ import { AssignmentResponseDto } from '../dto/assignmentResponse.dto.js';
 
 export interface AssignmentService {
   create(
-    matchId: number,
+    matchId: string,
     createAssignmentDto: CreateAssignmentDto,
-  ): AssignmentResponseDto;
-  findAllByMatch(matchId: number): AssignmentResponseDto[];
-  findOne(id: number): AssignmentResponseDto;
-  remove(id: number): { message: string };
+  ): Promise<AssignmentResponseDto>;
+  findAllByMatch(matchId: string): Promise<AssignmentResponseDto[]>;
+  findOne(id: number): Promise<AssignmentResponseDto>;
+  remove(id: number): Promise<{ message: string }>;
   update(
     id: number,
     updateAssignmentDto: UpdateAssignmentDto,
-  ): AssignmentResponseDto;
+  ): Promise<AssignmentResponseDto>;
 }

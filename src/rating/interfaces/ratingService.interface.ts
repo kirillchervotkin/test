@@ -7,7 +7,7 @@ export interface RatingService {
   create(
     assignmentId: number,
     createRatingDto: CreateRatingDto,
-  ): RatingResponseDto;
+  ): Promise<RatingResponseDto>;
 
   // Полностью обновляет существующую оценку по её ID (заменяет все поля из CreateDto)
   update(id: number, createRatingDto: CreateRatingDto): RatingResponseDto;
@@ -37,5 +37,5 @@ export interface RatingService {
   findAllByUserId(userId: number): RatingResponseDto[];
 
   // Получает все оценки для указанного матча
-  findAllByMatchId(matchId: number): RatingResponseDto[];
+  findAllByMatchId(matchId: string): RatingResponseDto[];
 }

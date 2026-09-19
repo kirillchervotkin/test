@@ -1,16 +1,10 @@
 import { Module } from '@nestjs/common';
-import { TournamentController } from './tournament.controller.js';
-import { TOURNAMENTS_SERVICE } from './tokens.js';
-import { TypeOrmTournamentsService } from './tournament.service.js';
-
+import { AuthModule } from '../auth/auth.module.js';
+import { ScheduleDomainModule } from '../schedule/schedule-domain.module.js';
+import { TournamentController } from '../schedule/schedule.controllers.js';
 @Module({
-  providers: [
-    {
-      provide: TOURNAMENTS_SERVICE,
-      useClass: TypeOrmTournamentsService,
-    },
-  ],
+  imports: [AuthModule, ScheduleDomainModule],
   controllers: [TournamentController],
-  exports: [TOURNAMENTS_SERVICE],
+  exports: [ScheduleDomainModule],
 })
 export class TournamentModule {}

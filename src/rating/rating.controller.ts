@@ -59,10 +59,10 @@ export class RatingsController {
     description: 'Оценка для данного назначения уже существует',
   })
   @ApiNotFoundResponse({ description: 'Назначение не найдено' })
-  create(
+  async create(
     @Param('assignmentId', ParseIntPipe) assignmentId: number,
     @Body() createRatingDto: CreateRatingDto,
-  ): RatingResponseDto {
+  ): Promise<RatingResponseDto> {
     return this.ratingsService.create(assignmentId, createRatingDto);
   }
 
@@ -251,17 +251,15 @@ export class RatingsController {
   })
   @ApiParam({
     name: 'matchId',
-    description: 'ID матча',
-    type: Number,
+    description: 'ID матча Uint64',
+    type: String,
     example: 1,
   })
   @ApiOkResponse({
     description: 'Список оценок для матча получен успешно',
     type: [RatingResponseDto],
   })
-  findAllByMatchId(
-    @Param('matchId', ParseIntPipe) matchId: number,
-  ): RatingResponseDto[] {
+  findAllByMatchId(@Param('matchId') matchId: string): RatingResponseDto[] {
     return this.ratingsService.findAllByMatchId(matchId);
   }
 }

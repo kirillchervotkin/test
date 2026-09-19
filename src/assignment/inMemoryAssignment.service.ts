@@ -16,7 +16,7 @@ export class InMemoryAssignmentService implements AssignmentService {
   private assignments: AssignmentResponseDto[] = [
     {
       id: 1,
-      matchId: 1,
+      matchId: '1',
       userId: 101,
       fieldRoleId: 1,
       createdAt: '2023-09-01T00:00:00.000Z',
@@ -24,7 +24,7 @@ export class InMemoryAssignmentService implements AssignmentService {
     },
     {
       id: 2,
-      matchId: 1,
+      matchId: '1',
       userId: 102,
       fieldRoleId: 2,
       createdAt: '2023-09-01T00:00:00.000Z',
@@ -32,7 +32,7 @@ export class InMemoryAssignmentService implements AssignmentService {
     },
     {
       id: 3,
-      matchId: 1,
+      matchId: '1',
       userId: 103,
       fieldRoleId: 2,
       createdAt: '2023-09-01T00:00:00.000Z',
@@ -40,7 +40,7 @@ export class InMemoryAssignmentService implements AssignmentService {
     },
     {
       id: 4,
-      matchId: 2,
+      matchId: '2',
       userId: 104,
       fieldRoleId: 1,
       createdAt: '2023-09-02T00:00:00.000Z',
@@ -48,7 +48,7 @@ export class InMemoryAssignmentService implements AssignmentService {
     },
     {
       id: 5,
-      matchId: 2,
+      matchId: '2',
       userId: 105,
       fieldRoleId: 4,
       createdAt: '2023-09-02T00:00:00.000Z',
@@ -82,7 +82,7 @@ export class InMemoryAssignmentService implements AssignmentService {
     private readonly matchesService: MatchService,
   ) {}
 
-  findOne(id: number): AssignmentResponseDto {
+  async findOne(id: number): Promise<AssignmentResponseDto> {
     const assignment = this.assignments.find(
       (assignment) => assignment.id === id,
     );
@@ -94,11 +94,11 @@ export class InMemoryAssignmentService implements AssignmentService {
     return assignment;
   }
 
-  create(
-    matchId: number,
+  async create(
+    matchId: string,
     createAssignmentDto: CreateAssignmentDto,
-  ): AssignmentResponseDto {
-    this.matchesService.findOne(matchId);
+  ): Promise<AssignmentResponseDto> {
+    await this.matchesService.findOne(matchId);
 
     const existingAssignment = this.assignments.find(
       (assignment) =>
@@ -142,15 +142,15 @@ export class InMemoryAssignmentService implements AssignmentService {
     return newAssignment;
   }
 
-  findAllByMatch(matchId: number): AssignmentResponseDto[] {
-    this.matchesService.findOne(matchId);
+  async findAllByMatch(matchId: string): Promise<AssignmentResponseDto[]> {
+    await this.matchesService.findOne(matchId);
 
     return this.assignments.filter(
       (assignment) => assignment.matchId === matchId,
     );
   }
 
-  remove(id: number): { message: string } {
+  async remove(id: number): Promise<{ message: string }> {
     const index = this.assignments.findIndex(
       (assignment) => assignment.id === id,
     );
@@ -163,11 +163,11 @@ export class InMemoryAssignmentService implements AssignmentService {
     return { message: `Назначение с ID ${id} успешно удалено` };
   }
 
-  update(
+  async update(
     id: number,
     updateAssignmentDto: UpdateAssignmentDto,
-  ): AssignmentResponseDto {
-    const assignment = this.findOne(id);
+  ): Promise<AssignmentResponseDto> {
+    const assignment = await this.findOne(id);
     const assignmentIndex = this.assignments.findIndex((a) => a.id === id);
 
     // Если меняем пользователя

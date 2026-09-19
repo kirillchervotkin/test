@@ -42,9 +42,9 @@ export class AssignmentsController {
   })
   @ApiParam({
     name: 'id',
-    description: 'ID матча',
-    type: Number,
-    example: 1,
+    description: 'ID матча Uint64',
+    type: String,
+    example: '1',
   })
   @ApiBody({ type: CreateAssignmentDto })
   @ApiCreatedResponse({
@@ -58,10 +58,10 @@ export class AssignmentsController {
   @ApiConflictResponse({
     description: 'Пользователь уже назначен на этот матч',
   })
-  create(
-    @Param('id', ParseIntPipe) matchId: number,
+  async create(
+    @Param('id') matchId: string,
     @Body() createAssignmentDto: CreateAssignmentDto,
-  ): AssignmentResponseDto {
+  ): Promise<AssignmentResponseDto> {
     return this.assignmentsService.create(matchId, createAssignmentDto);
   }
 
@@ -71,18 +71,18 @@ export class AssignmentsController {
   })
   @ApiParam({
     name: 'id',
-    description: 'ID матча',
-    type: Number,
-    example: 1,
+    description: 'ID матча Uint64',
+    type: String,
+    example: '1',
   })
   @ApiOkResponse({
     description: 'Список назначений на матч получен успешно',
     type: [AssignmentResponseDto],
   })
   @ApiNotFoundResponse({ description: 'Матч не найден' })
-  findAllByMatch(
-    @Param('id', ParseIntPipe) matchId: number,
-  ): AssignmentResponseDto[] {
+  async findAllByMatch(
+    @Param('id') matchId: string,
+  ): Promise<AssignmentResponseDto[]> {
     return this.assignmentsService.findAllByMatch(matchId);
   }
 
@@ -104,7 +104,9 @@ export class AssignmentsController {
   })
   @ApiNotFoundResponse({ description: 'Назначение не найдено' })
   @HttpCode(HttpStatus.OK)
-  remove(@Param('id', ParseIntPipe) id: number): { message: string } {
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+  ): Promise<{ message: string }> {
     return this.assignmentsService.remove(id);
   }
 
@@ -132,10 +134,10 @@ export class AssignmentsController {
     description: 'Новый пользователь уже назначен на этот матч',
   })
   @ApiBadRequestResponse({ description: 'Неверные входные данные' })
-  update(
+  async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateAssignmentDto: UpdateAssignmentDto,
-  ): AssignmentResponseDto {
+  ): Promise<AssignmentResponseDto> {
     return this.assignmentsService.update(id, updateAssignmentDto);
   }
 }

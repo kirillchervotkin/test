@@ -8,7 +8,7 @@ export class RatingResponseDto {
   assignmentId: number;
 
   @ApiProperty({ description: 'ID матча', example: 1 })
-  matchId: number;
+  matchId: string;
 
   @ApiProperty({ description: 'ID пользователя (судьи)', example: 101 })
   userId: number;
