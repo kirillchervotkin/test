@@ -44,6 +44,7 @@ import { TestGradesModule } from './test-grades/test-grade.module.js';
 import { TriggerModule } from './trigger/trigger.module.js';
 import { QueueModule } from './queue/queue.module.js';
 import { BackfillModule } from './backfill/backfill.module.js';
+import { TrainingModule } from './training/training.module.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -150,6 +151,7 @@ const __dirname = dirname(__filename);
     TriggerModule,
     QueueModule,
     BackfillModule,
+    TrainingModule,
   ],
   controllers: [],
   providers: [

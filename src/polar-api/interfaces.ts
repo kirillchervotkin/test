@@ -11,19 +11,20 @@ import { z } from 'zod';
  * Параметры:
  *   - offset: true — разрешает "Z" и "+HH:MM"
  *   - local: true  — разрешает даты без таймзоны вообще
- *
- * Вместо .refine() используем встроенную валидацию — она возвращает
- * ZodString, а не ZodEffects, и TypeScript корректно выводит тип.
  */
 const DateTimeString = z.string().datetime({ offset: true, local: true });
 
 // ─── Числовые хелперы ───────────────────────────────────────
 /**
- * В примерах Polar встречаются "странные" значения (walkingDurationMillis
- * при walkingDistanceMeters > 0), но всё это валидные числа.
+ * Polar AccessLink в JSON-ответах часто присылает числа строками:
+ *   "height": "180.0", "weight": "70.0", "recoveryTimeMillis": "1234"
+ *
+ * Поэтому все числовые поля проходят через z.coerce.number():
+ * он принимает и number, и numeric string, и приводит к number.
+ * Это безопасно: для настоящих чисел поведение не меняется.
  */
-const NonNegativeNumber = z.number();
-const NonNegativeInt = z.number().int();
+const NonNegativeNumber = z.coerce.number();
+const NonNegativeInt = z.coerce.number().int();
 
 // ─── Идентификаторы и справочники ───────────────────────────
 export const IdentifierSchema = z.object({
@@ -48,27 +49,27 @@ export const PhysicalInformationSchema = z.object({
   created: DateTimeString,
   birthday: z.string().optional(),
   sex: z.string().optional(),
-  weightKg: z.number().optional(),
-  heightCm: z.number().int().optional(),
-  maximumHeartRate: z.number().int().optional(),
-  restingHeartRate: z.number().int().optional(),
-  aerobicThreshold: z.number().int().optional(),
-  anaerobicThreshold: z.number().int().optional(),
-  vo2Max: z.number().optional(),
+  weightKg: z.coerce.number().optional(),
+  heightCm: z.coerce.number().int().optional(),
+  maximumHeartRate: z.coerce.number().int().optional(),
+  restingHeartRate: z.coerce.number().int().optional(),
+  aerobicThreshold: z.coerce.number().int().optional(),
+  anaerobicThreshold: z.coerce.number().int().optional(),
+  vo2Max: z.coerce.number().optional(),
   trainingBackground: z.string().optional(),
   typicalDay: z.string().optional(),
-  metThreshold: z.number().optional(),
-  weeklyRtSum: z.number().optional(),
-  functionalThresholdPower: z.number().optional(),
-  speedCalibrationOffset: z.number().optional(),
+  metThreshold: z.coerce.number().optional(),
+  weeklyRtSum: z.coerce.number().optional(),
+  functionalThresholdPower: z.coerce.number().optional(),
+  speedCalibrationOffset: z.coerce.number().optional(),
   weightSource: z.string().optional(),
-  sleepGoalMinutes: z.number().int().optional(),
-  maximumAerobicPower: z.number().optional(),
-  maximumAerobicSpeedKmh: z.number().optional(),
+  sleepGoalMinutes: z.coerce.number().int().optional(),
+  maximumAerobicPower: z.coerce.number().optional(),
+  maximumAerobicSpeedKmh: z.coerce.number().optional(),
   maximumAerobicSpeedSource: z.string().optional(),
 });
 
-// ─── Samples ────────────────────────────────────────────────
+// ─── Samples (v4) ───────────────────────────────────────────
 export const SampleTypeEnum = z.enum([
   'HEART_RATE',
   'SPEED',
@@ -82,24 +83,24 @@ export const SampleTypeEnum = z.enum([
 
 export const SampleSchema = z.object({
   type: SampleTypeEnum,
-  intervalMillis: z.number().int().positive(),
-  values: z.array(z.number()),
+  intervalMillis: z.coerce.number().int().positive(),
+  values: z.array(z.coerce.number()),
 });
 
 export const RrSampleSchema = z.object({
-  durationMillis: z.number().int().optional(),
+  durationMillis: z.coerce.number().int().optional(),
   offline: z.boolean().optional(),
-  values: z.array(z.number()).optional(),
+  values: z.array(z.coerce.number()).optional(),
 });
 
 export const SwimmingPhasesSchema = z.object({
   startTime: DateTimeString,
   phases: z.array(
     z.object({
-      startOffsetMillis: z.number().int(),
-      durationMillis: z.number().int(),
+      startOffsetMillis: z.coerce.number().int(),
+      durationMillis: z.coerce.number().int(),
       style: z.string(),
-      strokes: z.number().int(),
+      strokes: z.coerce.number().int(),
     }),
   ),
 });
@@ -114,10 +115,10 @@ export const SamplesWrapperSchema = z.object({
 
 // ─── Routes ─────────────────────────────────────────────────
 export const WayPointSchema = z.object({
-  longitude: z.number(),
-  latitude: z.number(),
-  altitude: z.number().optional(),
-  elapsedMillis: z.number().int(),
+  longitude: z.coerce.number(),
+  latitude: z.coerce.number(),
+  altitude: z.coerce.number().optional(),
+  elapsedMillis: z.coerce.number().int(),
 });
 
 export const RouteSchema = z.object({
@@ -132,11 +133,11 @@ export const RoutesWrapperSchema = z.object({
 
 // ─── Zones ──────────────────────────────────────────────────
 export const ZoneSchema = z.object({
-  lowerLimit: z.number(),
-  higherLimit: z.number(),
-  inZone: z.number(),
-  distanceMeters: z.number().optional(),
-  muscleLoad: z.number().optional(),
+  lowerLimit: z.coerce.number(),
+  higherLimit: z.coerce.number(),
+  inZone: z.coerce.number(),
+  distanceMeters: z.coerce.number().optional(),
+  muscleLoad: z.coerce.number().optional(),
 });
 
 export const ZonesGroupSchema = z.object({
@@ -147,39 +148,39 @@ export const ZonesGroupSchema = z.object({
 // ─── Statistics ─────────────────────────────────────────────
 export const StatisticEntrySchema = z.object({
   type: z.string(),
-  min: z.number(),
-  avg: z.number(),
-  max: z.number(),
+  min: z.coerce.number(),
+  avg: z.coerce.number(),
+  max: z.coerce.number(),
 });
 
 export const SwimmingStatisticsSchema = z.object({
-  distanceMeters: z.number().optional(),
-  totalStrokeCount: z.number().int().optional(),
-  poolsSwum: z.number().int().optional(),
+  distanceMeters: z.coerce.number().optional(),
+  totalStrokeCount: z.coerce.number().int().optional(),
+  poolsSwum: z.coerce.number().int().optional(),
   poolUnits: z.string().optional(),
-  poolLength: z.number().optional(),
-  avgSecsPerPool: z.number().optional(),
-  strokes: z.number().int().optional(),
+  poolLength: z.coerce.number().optional(),
+  avgSecsPerPool: z.coerce.number().optional(),
+  strokes: z.coerce.number().int().optional(),
   swimmingStyles: z
     .array(
       z.object({
         style: z.string(),
-        distanceMeters: z.number().optional(),
-        strokeCount: z.number().int().optional(),
-        swimmingTimeTotalMillis: z.number().int().optional(),
-        poolTimeMinMillis: z.number().int().optional(),
-        hrAvg: z.number().int().optional(),
-        hrMax: z.number().int().optional(),
-        swolfAvg: z.number().optional(),
+        distanceMeters: z.coerce.number().optional(),
+        strokeCount: z.coerce.number().int().optional(),
+        swimmingTimeTotalMillis: z.coerce.number().int().optional(),
+        poolTimeMinMillis: z.coerce.number().int().optional(),
+        hrAvg: z.coerce.number().int().optional(),
+        hrMax: z.coerce.number().int().optional(),
+        swolfAvg: z.coerce.number().optional(),
       }),
     )
     .optional(),
 });
 
 export const TrainingPeaksStatisticsSchema = z.object({
-  intensityFactor: z.number().optional(),
-  normalizedPower: z.number().optional(),
-  trainingStressScore: z.number().optional(),
+  intensityFactor: z.coerce.number().optional(),
+  normalizedPower: z.coerce.number().optional(),
+  trainingStressScore: z.coerce.number().optional(),
 });
 
 export const StatisticsSchema = z.object({
@@ -190,15 +191,15 @@ export const StatisticsSchema = z.object({
 
 // ─── Laps ───────────────────────────────────────────────────
 export const LapSchema = z.object({
-  splitTimeMillis: z.number().int(),
-  durationMillis: z.number().int(),
-  distanceMeters: z.number().optional(),
-  startLocationLatitude: z.number().optional(),
-  startLocationLongitude: z.number().optional(),
-  startLocationAltitude: z.number().optional(),
-  startLocationTimeMillis: z.number().int().optional(),
-  ascentMeters: z.number().optional(),
-  descentMeters: z.number().optional(),
+  splitTimeMillis: z.coerce.number().int(),
+  durationMillis: z.coerce.number().int(),
+  distanceMeters: z.coerce.number().optional(),
+  startLocationLatitude: z.coerce.number().optional(),
+  startLocationLongitude: z.coerce.number().optional(),
+  startLocationAltitude: z.coerce.number().optional(),
+  startLocationTimeMillis: z.coerce.number().int().optional(),
+  ascentMeters: z.coerce.number().optional(),
+  descentMeters: z.coerce.number().optional(),
   statistics: StatisticsSchema.optional(),
 });
 
@@ -210,18 +211,18 @@ export const LapsWrapperSchema = z.object({
 // ─── Strength training results ──────────────────────────────
 export const CompletedSetSchema = z.object({
   type: z.string(),
-  startTimeDeltaMillis: z.number().int(),
-  endTimeDeltaMillis: z.number().int(),
+  startTimeDeltaMillis: z.coerce.number().int(),
+  endTimeDeltaMillis: z.coerce.number().int(),
   resistanceType: z.string().optional(),
   movement: z.string().optional(),
-  avgHeartRate: z.number().int().optional(),
-  maxHeartRate: z.number().int().optional(),
+  avgHeartRate: z.coerce.number().int().optional(),
+  maxHeartRate: z.coerce.number().int().optional(),
 });
 
 export const CompletedRoundSchema = z.object({
   type: z.string(),
-  startTimeDeltaMillis: z.number().int(),
-  endTimeDeltaMillis: z.number().int(),
+  startTimeDeltaMillis: z.coerce.number().int(),
+  endTimeDeltaMillis: z.coerce.number().int(),
   workoutPhase: z.string().optional(),
   completedSets: z.array(CompletedSetSchema).optional(),
 });
@@ -232,13 +233,13 @@ export const StrengthTrainingResultsSchema = z.object({
 
 // ─── Training load report ───────────────────────────────────
 export const TrainingLoadReportSchema = z.object({
-  cardioLoad: z.number().optional(),
-  muscleLoad: z.number().optional(),
+  cardioLoad: z.coerce.number().optional(),
+  muscleLoad: z.coerce.number().optional(),
   cardioLoadInterpretation: z.string().optional(),
   muscleLoadInterpretation: z.string().optional(),
   calculationTime: DateTimeString.optional(),
   sessionRpe: z.string().optional(),
-  perceivedLoad: z.number().optional(),
+  perceivedLoad: z.coerce.number().optional(),
   perceivedLoadInterpretation: z.string().optional(),
 });
 
@@ -251,10 +252,10 @@ export const PauseTimeSchema = z.object({
 // ─── Calibration offsets ────────────────────────────────────
 export const CalibrationOffsetSchema = z.object({
   sampleSourceType: z.string(),
-  value: z.number(),
+  value: z.coerce.number(),
 });
 
-// ─── Exercise внутри сессии ─────────────────────────────────
+// ─── Exercise внутри сессии (v4) ────────────────────────────
 export const ExerciseSchema = z.object({
   identifier: IdentifierSchema,
   created: DateTimeString,
@@ -264,21 +265,21 @@ export const ExerciseSchema = z.object({
   durationMillis: NonNegativeInt,
   distanceMeters: NonNegativeNumber.optional(),
   calories: NonNegativeNumber.optional(),
-  fatPercentage: z.number().optional(),
+  fatPercentage: z.coerce.number().optional(),
   recoveryTimeMillis: NonNegativeInt.optional(),
-  trainingLoad: z.number().optional(),
-  carboPercentage: z.number().optional(),
-  proteinPercentage: z.number().optional(),
-  runningIndex: z.number().optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
-  ascentMeters: z.number().optional(),
-  descentMeters: z.number().optional(),
-  sprintCounter: z.number().int().optional(),
+  trainingLoad: z.coerce.number().optional(),
+  carboPercentage: z.coerce.number().optional(),
+  proteinPercentage: z.coerce.number().optional(),
+  runningIndex: z.coerce.number().optional(),
+  latitude: z.coerce.number().optional(),
+  longitude: z.coerce.number().optional(),
+  ascentMeters: z.coerce.number().optional(),
+  descentMeters: z.coerce.number().optional(),
+  sprintCounter: z.coerce.number().int().optional(),
   walkingDurationMillis: NonNegativeInt.optional(),
   walkingDistanceMeters: NonNegativeNumber.optional(),
-  speedCalibrationOffset: z.number().optional(),
-  timezoneOffsetMinutes: z.number().int().optional(),
+  speedCalibrationOffset: z.coerce.number().optional(),
+  timezoneOffsetMinutes: z.coerce.number().int().optional(),
   calibrationOffsets: z.array(CalibrationOffsetSchema).optional(),
   sport: SportRefSchema.optional(),
   strengthTrainingResults: StrengthTrainingResultsSchema.optional(),
@@ -296,14 +297,14 @@ export const TestPhaseSchema = z.object({
   startTime: DateTimeString,
   endTime: DateTimeString,
   durationMillis: NonNegativeInt,
-  avgHrBpm: z.number().int().optional(),
-  maxHrBpm: z.number().int().optional(),
-  avgSpeedKmh: z.number().optional(),
-  maxSpeedKmh: z.number().optional(),
-  avgCadence: z.number().optional(),
-  maxCadence: z.number().optional(),
-  avgPower: z.number().optional(),
-  maxPower: z.number().optional(),
+  avgHrBpm: z.coerce.number().int().optional(),
+  maxHrBpm: z.coerce.number().int().optional(),
+  avgSpeedKmh: z.coerce.number().optional(),
+  maxSpeedKmh: z.coerce.number().optional(),
+  avgCadence: z.coerce.number().optional(),
+  maxCadence: z.coerce.number().optional(),
+  avgPower: z.coerce.number().optional(),
+  maxPower: z.coerce.number().optional(),
 });
 
 export const CyclingTestSchema = z.object({
@@ -313,9 +314,9 @@ export const CyclingTestSchema = z.object({
   performance: TestPhaseSchema.optional(),
   cooldown: TestPhaseSchema.optional(),
   fitnessClass: z.string().optional(),
-  functionalThresholdPower: z.number().optional(),
-  previousFunctionalThresholdPower: z.number().optional(),
-  vo2max: z.number().optional(),
+  functionalThresholdPower: z.coerce.number().optional(),
+  previousFunctionalThresholdPower: z.coerce.number().optional(),
+  vo2max: z.coerce.number().optional(),
 });
 
 export const RunningTestSchema = z.object({
@@ -325,13 +326,13 @@ export const RunningTestSchema = z.object({
   performance: TestPhaseSchema.optional(),
   cooldown: TestPhaseSchema.optional(),
   category: z.string().optional(),
-  maxAerobicSpeedKmh: z.number().optional(),
-  maxAerobicPower: z.number().optional(),
-  maxHrBpm: z.number().int().optional(),
-  vo2max: z.number().optional(),
-  initialSpeedKmh: z.number().optional(),
-  speedIncreaseRate: z.number().optional(),
-  qualityRatePercent: z.number().optional(),
+  maxAerobicSpeedKmh: z.coerce.number().optional(),
+  maxAerobicPower: z.coerce.number().optional(),
+  maxHrBpm: z.coerce.number().int().optional(),
+  vo2max: z.coerce.number().optional(),
+  initialSpeedKmh: z.coerce.number().optional(),
+  speedIncreaseRate: z.coerce.number().optional(),
+  qualityRatePercent: z.coerce.number().optional(),
 });
 
 export const WalkingTestSchema = z.object({
@@ -342,23 +343,23 @@ export const WalkingTestSchema = z.object({
   cooldown: TestPhaseSchema.optional(),
   category: z.string().optional(),
   fitnessClass: z.string().optional(),
-  avgSpeedKmh: z.number().optional(),
-  maxSpeedKmh: z.number().optional(),
-  testDistanceMeters: z.number().optional(),
-  steps: z.number().int().optional(),
-  avgCadence: z.number().optional(),
-  maxCadence: z.number().optional(),
-  testHrBpm: z.number().int().optional(),
-  maxHrBpm: z.number().int().optional(),
-  vo2max: z.number().optional(),
-  walkingPercent: z.number().optional(),
-  speedVariationPercent: z.number().optional(),
-  cadenceVariationPercent: z.number().optional(),
-  hrAbove65ProsMaxHr: z.number().optional(),
-  allCriterionQualityPercent: z.number().optional(),
-  steadyWalkingGuidance: z.number().optional(),
-  walkingSpeedGuidance: z.number().optional(),
-  duration: z.number().int().optional(),
+  avgSpeedKmh: z.coerce.number().optional(),
+  maxSpeedKmh: z.coerce.number().optional(),
+  testDistanceMeters: z.coerce.number().optional(),
+  steps: z.coerce.number().int().optional(),
+  avgCadence: z.coerce.number().optional(),
+  maxCadence: z.coerce.number().optional(),
+  testHrBpm: z.coerce.number().int().optional(),
+  maxHrBpm: z.coerce.number().int().optional(),
+  vo2max: z.coerce.number().optional(),
+  walkingPercent: z.coerce.number().optional(),
+  speedVariationPercent: z.coerce.number().optional(),
+  cadenceVariationPercent: z.coerce.number().optional(),
+  hrAbove65ProsMaxHr: z.coerce.number().optional(),
+  allCriterionQualityPercent: z.coerce.number().optional(),
+  steadyWalkingGuidance: z.coerce.number().optional(),
+  walkingSpeedGuidance: z.coerce.number().optional(),
+  duration: z.coerce.number().int().optional(),
 });
 
 export const TestResultsSchema = z.object({
@@ -374,39 +375,39 @@ export const HillSchema = z.object({
   endTime: DateTimeString,
   upHill: z
     .object({
-      uphillNumber: z.number().int(),
-      ascentMeters: z.number(),
-      avgInclinePercent: z.number(),
+      uphillNumber: z.coerce.number().int(),
+      ascentMeters: z.coerce.number(),
+      avgInclinePercent: z.coerce.number(),
     })
     .optional(),
   downHill: z
     .object({
-      downhillNumber: z.number().int(),
-      descentMeters: z.number(),
-      avgDeclinePercent: z.number(),
+      downhillNumber: z.coerce.number().int(),
+      descentMeters: z.coerce.number(),
+      avgDeclinePercent: z.coerce.number(),
     })
     .optional(),
-  distanceMeters: z.number().optional(),
-  maxSpeedKmh: z.number().optional(),
-  avgSpeedKmh: z.number().optional(),
-  startAltitudeMeters: z.number().optional(),
-  endAltitudeMeters: z.number().optional(),
-  avgHrBpm: z.number().int().optional(),
-  maxHrBpm: z.number().int().optional(),
-  duration: z.number().int().optional(),
-  avgCadence: z.number().optional(),
-  maxCadence: z.number().optional(),
-  avgPower: z.number().optional(),
-  maxPower: z.number().optional(),
+  distanceMeters: z.coerce.number().optional(),
+  maxSpeedKmh: z.coerce.number().optional(),
+  avgSpeedKmh: z.coerce.number().optional(),
+  startAltitudeMeters: z.coerce.number().optional(),
+  endAltitudeMeters: z.coerce.number().optional(),
+  avgHrBpm: z.coerce.number().int().optional(),
+  maxHrBpm: z.coerce.number().int().optional(),
+  duration: z.coerce.number().int().optional(),
+  avgCadence: z.coerce.number().optional(),
+  maxCadence: z.coerce.number().optional(),
+  avgPower: z.coerce.number().optional(),
+  maxPower: z.coerce.number().optional(),
 });
 
 export const HillSplitsSchema = z.object({
   startTime: DateTimeString,
   endTime: DateTimeString,
-  totalUphillDistanceMeters: z.number().optional(),
-  totalDownhillDistanceMeters: z.number().optional(),
-  totalUphillCount: z.number().int().optional(),
-  totalDownhillCount: z.number().int().optional(),
+  totalUphillDistanceMeters: z.coerce.number().optional(),
+  totalDownhillDistanceMeters: z.coerce.number().optional(),
+  totalUphillCount: z.coerce.number().int().optional(),
+  totalDownhillCount: z.coerce.number().int().optional(),
   hills: z.array(HillSchema).optional(),
 });
 
@@ -419,7 +420,7 @@ export const CommentSchema = z.object({
   fromOtherUser: z.boolean().optional(),
 });
 
-// ─── Training Session ───────────────────────────────────────
+// ─── Training Session (v4) ──────────────────────────────────
 export const TrainingSessionSchema = z.object({
   identifier: IdentifierSchema,
   created: DateTimeString,
@@ -428,22 +429,22 @@ export const TrainingSessionSchema = z.object({
   stopTime: DateTimeString,
   durationMillis: NonNegativeInt,
   name: z.string().optional(),
-  feeling: z.number().optional(),
+  feeling: z.coerce.number().optional(),
   deviceId: z.string().optional(),
   note: z.string().optional(),
-  latitude: z.number().optional(),
-  longitude: z.number().optional(),
+  latitude: z.coerce.number().optional(),
+  longitude: z.coerce.number().optional(),
   distanceMeters: NonNegativeNumber.optional(),
   calories: NonNegativeNumber.optional(),
-  trainingLoad: z.number().optional(),
+  trainingLoad: z.coerce.number().optional(),
   trainingBenefit: z.string().optional(),
-  carboPercentage: z.number().optional(),
-  fatPercentage: z.number().optional(),
-  proteinPercentage: z.number().optional(),
+  carboPercentage: z.coerce.number().optional(),
+  fatPercentage: z.coerce.number().optional(),
+  proteinPercentage: z.coerce.number().optional(),
   recoveryTimeMillis: NonNegativeInt.optional(),
-  hrMax: z.number().int().optional(),
-  hrAvg: z.number().int().optional(),
-  timezoneOffsetMinutes: z.number().int().optional(),
+  hrMax: z.coerce.number().int().optional(),
+  hrAvg: z.coerce.number().int().optional(),
+  timezoneOffsetMinutes: z.coerce.number().int().optional(),
   startTrigger: z.string().optional(),
   physicalInformation: PhysicalInformationSchema.optional(),
   application: ApplicationSchema.optional(),
@@ -459,12 +460,12 @@ export const TrainingSessionSchema = z.object({
   comments: z.array(CommentSchema).optional(),
 });
 
-// ─── Корневой ответ ─────────────────────────────────────────
+// ─── Корневой ответ v4 ──────────────────────────────────────
 export const TrainingSessionsResponseSchema = z.object({
   trainingSessions: z.array(TrainingSessionSchema),
 });
 
-// ─── Features (query-параметр) ──────────────────────────────
+// ─── Features (query-параметр v4) ───────────────────────────
 export const TRAINING_SESSION_FEATURES = [
   'samples',
   'test-results',
@@ -480,7 +481,206 @@ export const TRAINING_SESSION_FEATURES = [
   'physical-info',
 ] as const;
 
-// ─── User Registration ──────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+//  v3 API
+// ═══════════════════════════════════════════════════════════
+//
+// v3 использует snake_case в ответах. Реальные ответы проверены
+// на живом Polar (см. логи getExercise RAW keys).
+//
+// Ниже — схемы для:
+//   GET /v3/exercises            — список тренировок за 30 дней
+//   GET /v3/exercises/{id}       — одна тренировка с samples
+//   POST /v3/users               — регистрация пользователя
+
+// ─── Элемент списка тренировок (v3) ─────────────────────────
+/**
+ * Поля — snake_case, как их возвращает Polar v3.
+ *
+ * .passthrough() нужен, потому что Polar v3 может вернуть
+ * больше полей, чем мы описали. Лишние не ломают валидацию
+ * и остаются доступными в объекте как есть.
+ */
+export const ExerciseV3Schema = z
+  .object({
+    id: z.string(),
+    upload_time: z.string().optional(),
+    polar_user: z.string().optional(),
+    device: z.string().optional(),
+    device_id: z.string().optional(),
+    start_time: z.string(),
+    start_time_utc_offset: z.coerce.number().int().optional(),
+    duration: z.string().optional(),
+    calories: z.coerce.number().int().optional(),
+    distance: z.coerce.number().optional(),
+    heart_rate: z
+      .object({
+        average: z.coerce.number().int().optional(),
+        maximum: z.coerce.number().int().optional(),
+      })
+      .optional(),
+    training_load: z.coerce.number().optional(),
+    sport: z.string().optional(),
+    has_route: z.boolean().optional(),
+    club_id: z.coerce.number().int().optional(),
+  })
+  .passthrough();
+
+/**
+ * Ответ GET /v3/exercises.
+ *
+ * ВАЖНО: v3 возвращает МАССИВ тренировок напрямую, без обёртки
+ * в объект. Именно поэтому схема — не z.object, а z.array.
+ */
+export const ExercisesResponseSchema = z.array(ExerciseV3Schema);
+
+// ─── Одна тренировка (v3) ───────────────────────────────────
+/**
+ * GET /v3/exercises/{exerciseId}
+ *
+ * Реальные поля (проверено на живом ответе Polar):
+ *   - `samples[]` использует snake_case: `recording_rate`,
+ *     `sample_type`, `data`. НЕ kebab-case, как в документации.
+ *   - `sample_type` — число (0, 1, 2, ...), не строка.
+ *   - `training_load_pro` не всегда содержит `date`.
+ *
+ * Числовые поля обёрнуты в z.coerce.number(): Polar v3 иногда
+ * присылает их строками, иногда числами.
+ *
+ * `.passthrough()` на верхнем уровне — Polar может добавить
+ * новые поля без предупреждения.
+ */
+
+export const PolarHeartRateSchema = z
+  .object({
+    average: z.coerce.number().int().optional(),
+    maximum: z.coerce.number().int().optional(),
+  })
+  .passthrough();
+
+/**
+ * Элемент `heart_rate_zones`. Ключи в kebab-case — так их
+ * возвращает Polar (проверено на живом ответе).
+ */
+export const PolarHeartRateZoneSchema = z.object({
+  index: z.coerce.number().int(),
+  'lower-limit': z.coerce.number().int(),
+  'upper-limit': z.coerce.number().int(),
+  'in-zone': z.string(),
+});
+
+/**
+ * Элемент `samples` — один канал сэмплов.
+ *
+ * ВАЖНО: реальный формат — snake_case, а не kebab-case:
+ *   { "recording_rate": 1, "sample_type": 0, "data": "0,0,0,..." }
+ *
+ * `sample_type` — ЧИСЛО, а не строка:
+ *   0 — not defined / неизвестный канал
+ *   1 — Heart rate
+ *   2 — Speed
+ *   3 — Cadence
+ *   4 — Altitude
+ *   5 — Power
+ *   6 — Distance
+ *   7 — Temperature
+ *
+ * `recording_rate` — интервал записи в секундах.
+ * `data` — значения через запятую, одной строкой.
+ *
+ * `data` НЕ парсим здесь в массив: маппинг делает PolarAdapter.
+ */
+export const PolarSampleSchema = z.object({
+  recording_rate: z.coerce.number().int().positive(),
+  sample_type: z.coerce.number().int(),
+  data: z.string(),
+});
+
+/**
+ * Элемент `route` — одна GPS-точка.
+ */
+export const PolarRoutePointSchema = z.object({
+  latitude: z.coerce.number(),
+  longitude: z.coerce.number(),
+  time: z.string(), // ISO 8601 duration от старта, "PT210.026S"
+  satellites: z.coerce.number().int().optional(),
+  fix: z.coerce.number().int().optional(),
+});
+
+/**
+ * Блок `training_load_pro` — расширенный training load.
+ *
+ * Все поля опциональны. В реальных ответах Polar `date` иногда
+ * отсутствует, а значения могут быть -1 (NOT_AVAILABLE).
+ * Ключи — kebab-case.
+ */
+export const PolarTrainingLoadProSchema = z.object({
+  date: z.string().optional(),
+  'cardio-load': z.coerce.number().optional(),
+  'muscle-load': z.coerce.number().optional(),
+  'perceived-load': z.coerce.number().optional(),
+  'cardio-load-interpretation': z.string().optional(),
+  'muscle-load-interpretation': z.string().optional(),
+  'perceived-load-interpretation': z.string().optional(),
+  'user-rpe': z.string().optional(),
+});
+
+/**
+ * Корневая схема одиночного ответа `GET /v3/exercises/{id}`.
+ */
+export const PolarExerciseSchema = z
+  .object({
+    // ── Идентификация ──
+    id: z.string(),
+    upload_time: z.string().optional(),
+    polar_user: z.string().optional(),
+
+    // ── Устройство ──
+    device: z.string().optional(),
+    device_id: z.string().optional(),
+
+    // ── Время ──
+    start_time: z.string(),
+    start_time_utc_offset: z.coerce.number().int().optional(),
+    duration: z.string(), // ISO 8601 duration, "PT2H44M"
+
+    // ── Основные метрики ──
+    calories: z.coerce.number().int().optional(),
+    distance: z.coerce.number().optional(),
+    heart_rate: PolarHeartRateSchema.optional(),
+    training_load: z.coerce.number().optional(),
+
+    // ── Спорт ──
+    sport: z.string().optional(),
+    detailed_sport_info: z.string().optional(),
+
+    // ── Маршрут ──
+    has_route: z.boolean().optional(),
+
+    // ── Клуб ──
+    club_id: z.coerce.number().int().optional(),
+    club_name: z.string().optional(),
+
+    // ── Проценты расхода ──
+    fat_percentage: z.coerce.number().optional(),
+    carbohydrate_percentage: z.coerce.number().optional(),
+    protein_percentage: z.coerce.number().optional(),
+
+    // ── Running index ──
+    // В JSON ключ с дефисом, в TS-объекте — через кавычки.
+    'running-index': z.coerce.number().optional(),
+
+    // ── Зоны и сэмплы ──
+    heart_rate_zones: z.array(PolarHeartRateZoneSchema).optional(),
+    samples: z.array(PolarSampleSchema).optional(),
+    route: z.array(PolarRoutePointSchema).optional(),
+
+    // ── Расширенный training load ──
+    training_load_pro: PolarTrainingLoadProSchema.optional(),
+  })
+  .passthrough();
+
+// ─── User Registration (v3) ─────────────────────────────────
 /**
  * POST /v3/users
  * Polar ожидает member-id — ваш внутренний идентификатор пользователя.
@@ -496,12 +696,12 @@ export const RegisterUserRequestSchema = z.object({
  */
 export const RegisterUserResponseSchema = z.object({
   'polar-user-id': z
-    .union([z.number().int().positive(), z.string().regex(/^\d+$/)])
+    .union([z.coerce.number().int().positive(), z.string().regex(/^\d+$/)])
     .transform(String),
   'member-id': z.string().optional(),
 });
 
-// ─── Типы ───────────────────────────────────────────────────
+// ─── Типы v4 ────────────────────────────────────────────────
 export type TrainingSession = z.infer<typeof TrainingSessionSchema>;
 export type Exercise = z.infer<typeof ExerciseSchema>;
 export type Sample = z.infer<typeof SampleSchema>;
@@ -510,5 +710,17 @@ export type TrainingSessionsResponse = z.infer<
 >;
 export type TrainingSessionFeature = (typeof TRAINING_SESSION_FEATURES)[number];
 
+// ─── Типы v3: список ────────────────────────────────────────
+export type ExerciseV3 = z.infer<typeof ExerciseV3Schema>;
+export type ExercisesResponse = z.infer<typeof ExercisesResponseSchema>;
+
+// ─── Типы v3: одна тренировка ───────────────────────────────
+export type PolarExerciseV3 = z.infer<typeof PolarExerciseSchema>;
+export type PolarSampleV3 = z.infer<typeof PolarSampleSchema>;
+export type PolarRoutePointV3 = z.infer<typeof PolarRoutePointSchema>;
+export type PolarHeartRateZoneV3 = z.infer<typeof PolarHeartRateZoneSchema>;
+export type PolarTrainingLoadProV3 = z.infer<typeof PolarTrainingLoadProSchema>;
+
+// ─── Типы v3: регистрация ───────────────────────────────────
 export type RegisterUserRequest = z.infer<typeof RegisterUserRequestSchema>;
 export type RegisterUserResponse = z.infer<typeof RegisterUserResponseSchema>;

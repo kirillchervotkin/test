@@ -1,7 +1,6 @@
 // queue/queue-producer.service.ts
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { randomUUID } from 'node:crypto';
 import {
   SendMessageCommand,
   SQSClient,
@@ -28,12 +27,22 @@ export interface PolarWebhookEvent {
 /**
  * Единое место записи сообщений в Yandex Message Queue.
  *
- * Формирует точно такой же конверт, какой создаёт Yandex API Gateway
- * при получении реального Polar-вебхука. Это гарантирует, что
- * WebhookController распакует сообщение одинаково независимо от источника:
- *   - реальный вебхук от Polar (через API Gateway);
- *   - backfill при OAuth-связывании;
- *   - ручной reprocess из admin-эндпоинта.
+ * Формирует тело сообщения в виде API Gateway envelope — точно так же,
+ * как это сделал бы API Gateway при получении реального Polar-вебхука.
+ *
+ * ВАЖНО: НЕ оборачиваем в trigger envelope
+ * (`{ event_metadata, details.message.body }`) — этот слой создаёт
+ * сам Yandex MQ при доставке сообщения в serverless-контейнер.
+ * Если положить его в очередь вручную, получится двойная обёртка,
+ * и WebhookController не сможет распарсить сообщение.
+ *
+ * Структура очереди (от внешнего к внутреннему):
+ *   1. YMQ trigger envelope  ← создаёт Yandex MQ при доставке
+ *      { messages: [{ event_metadata, details: { message: { body } } }] }
+ *   2. details.message.body = API Gateway envelope (мы кладём сюда)
+ *      { httpMethod, headers, body: "<строка polarEvent>" }
+ *   3. body = Polar-вебхук
+ *      { event, user_id, entity_id, timestamp, url }
  */
 @Injectable()
 export class QueueProducerService implements OnModuleDestroy {
@@ -65,19 +74,16 @@ export class QueueProducerService implements OnModuleDestroy {
    * Кладёт в очередь Polar-вебхук в формате, идентичном тому,
    * что создаёт Yandex API Gateway из реального запроса Polar.
    *
-   * Структура (от внешнего к внутреннему):
-   *   1. Trigger envelope  — { event_metadata, details }
-   *   2. details.message.body = JSON.stringify(apiGatewayEnvelope)
-   *   3. apiGatewayEnvelope.body = JSON.stringify(polarEvent)
-   *
-   * WebhookController делает ровно два JSON.parse, чтобы добраться
-   * до polarEvent.
+   * MessageBody = API Gateway envelope. Yandex MQ сам обернёт его
+   * в trigger envelope при доставке.
    */
   async sendPolarWebhook(event: PolarWebhookEvent): Promise<void> {
-    // Уровень 3: тело Polar-вебхука — строка
+    // Уровень 2: тело Polar-вебхука — строка
     const polarBody = JSON.stringify(event);
 
-    // Уровень 2: envelope API Gateway — как его положил бы API Gateway
+    // Уровень 1: envelope API Gateway — как его положил бы API Gateway.
+    // Именно это кладём в MessageBody. Trigger envelope НЕ добавляем —
+    // его создаст Yandex MQ сам.
     const apiGatewayEnvelope = {
       httpMethod: 'POST',
       headers: {
@@ -97,28 +103,13 @@ export class QueueProducerService implements OnModuleDestroy {
       path: '/polar-webhook',
     };
 
-    // Уровень 1: envelope Yandex Cloud Trigger
-    const triggerEnvelope = {
-      event_metadata: {
-        event_id: randomUUID(),
-        event_type: 'yandex.cloud.events.messagequeue.QueueMessage',
-        created_at: new Date().toISOString(),
-      },
-      details: {
-        queue_id: this.queueArn,
-        message: {
-          message_id: randomUUID(),
-          body: JSON.stringify(apiGatewayEnvelope),
-          attributes: {},
-        },
-      },
-    };
-
     try {
       await this.sqs.send(
         new SendMessageCommand({
           QueueUrl: this.queueUrl,
-          MessageBody: JSON.stringify(triggerEnvelope),
+          // MessageBody — только API Gateway envelope.
+          // Yandex MQ добавит { messages: [{ event_metadata, details: ... }] } сам.
+          MessageBody: JSON.stringify(apiGatewayEnvelope),
         }),
       );
 

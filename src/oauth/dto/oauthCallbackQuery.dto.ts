@@ -1,12 +1,16 @@
-import { IsOptional, IsString } from 'class-validator';
+// oauth/dto/oauthCallbackQuery.dto.ts
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class OauthCallbackQueryDto {
   @IsOptional()
   @IsString()
   code?: string;
 
+  // state обязателен — Polar всегда его присылает,
+  // и без него мы не сможем достать StateParams из кеша.
   @IsString()
-  state: string;
+  @IsNotEmpty()
+  state!: string;
 
   @IsOptional()
   @IsString()
@@ -15,4 +19,8 @@ export class OauthCallbackQueryDto {
   @IsOptional()
   @IsString()
   error_description?: string;
+
+  @IsOptional()
+  @IsString()
+  error_uri?: string;
 }

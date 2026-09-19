@@ -32,14 +32,31 @@ export interface BackfillResult {
  *
  * Сам ничего не обрабатывает: только читает список из Polar API
  * и раскладывает задачи в очередь. Реальная обработка — в WebhookService.
+ *
+ * ВАЖНО: polarUserId здесь — это Polar user-id (x_user_id), который
+ * мы получаем при регистрации пользователя через v3 API (POST /v3/users).
+ * Именно это значение приходит как `user_id` в вебхуках, поэтому
+ * без него невозможно связать тренировки с пользователем в БД.
+ *
+ * ВАЖНО: используется v3-эндпоинт GET /v3/exercises. Он:
+ *   - возвращает МАССИВ тренировок напрямую (не объект);
+ *   - использует snake_case в полях (id, start_time);
+ *   - отдаёт только тренировки за последние 30 дней
+ *     и не принимает from/to — фильтрация по диапазону
+ *     выполняется на стороне PolarApiService.
+ *
+ * Поэтому MAX_RANGE_DAYS фактически ограничен 30 днями на стороне
+ * Polar, а более старые тренировки в этот вызов не попадут.
  */
 @Injectable()
 export class BackfillService {
   private readonly logger = new Logger(BackfillService.name);
 
   /**
-   * Polar без features разрешает диапазон до 90 дней за один запрос.
-   * Для backfill нам нужны только ID тренировок, поэтому features не передаём.
+   * Запрашиваемый диапазон backfill. Реально Polar v3 отдаёт
+   * только 30 дней, но мы просим 90 — лишнее отфильтруется
+   * на стороне сервиса, и логика останется совместимой,
+   * если Polar расширит окно.
    */
   private static readonly MAX_RANGE_DAYS = 90;
 
@@ -72,19 +89,20 @@ export class BackfillService {
         `from=${from.toISOString()} to=${to.toISOString()}`,
     );
 
-    const response = await this.polarApi.listTrainingSessions({
+    // listTrainingSessions возвращает ExerciseV3[] напрямую —
+    // v3-эндпоинт GET /v3/exercises отдаёт массив, а не объект.
+    const exercises = await this.polarApi.listTrainingSessions({
       accessToken,
       from,
       to,
     });
 
-    const sessions = response.trainingSessions;
     this.logger.log(
-      `Backfill: Polar returned ${sessions.length} session(s) ` +
+      `Backfill: Polar returned ${exercises.length} exercise(s) ` +
         `for polarUserId=${polarUserId}`,
     );
 
-    if (sessions.length === 0) {
+    if (exercises.length === 0) {
       return {
         polarUserId,
         fetched: 0,
@@ -95,12 +113,13 @@ export class BackfillService {
       };
     }
 
-    const events: PolarWebhookEvent[] = sessions.map((session) => ({
+    const events: PolarWebhookEvent[] = exercises.map((ex) => ({
       event: 'EXERCISE',
       user_id: Number(polarUserId),
-      entity_id: session.identifier.id,
-      timestamp: session.startTime,
-      url: `https://www.polaraccesslink.com/v3/exercises/${session.identifier.id}`,
+      // v3 использует snake_case: id, start_time.
+      entity_id: ex.id,
+      timestamp: ex.start_time,
+      url: `https://www.polaraccesslink.com/v3/exercises/${ex.id}`,
     }));
 
     const enqueued = await this.queueProducer.sendPolarWebhooksBatch(events);
@@ -108,12 +127,12 @@ export class BackfillService {
 
     this.logger.log(
       `Backfill done | polarUserId=${polarUserId} | ` +
-        `fetched=${sessions.length} enqueued=${enqueued} | ${durationMs}ms`,
+        `fetched=${exercises.length} enqueued=${enqueued} | ${durationMs}ms`,
     );
 
     return {
       polarUserId,
-      fetched: sessions.length,
+      fetched: exercises.length,
       enqueued,
       from: from.toISOString(),
       to: to.toISOString(),

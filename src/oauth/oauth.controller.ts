@@ -1,7 +1,9 @@
+// oauth/oauth.controller.ts
 import {
   Controller,
   Get,
   Logger,
+  Post,
   Query,
   Res,
   HttpStatus,
@@ -22,13 +24,21 @@ import {
   ApiOperation,
   ApiQuery,
   ApiUnauthorizedResponse,
-  ApiResponse,
+  ApiFoundResponse,
   ApiTags,
   ApiInternalServerErrorResponse,
   ApiBadRequestResponse,
 } from '@nestjs/swagger';
 import { CLIENT_TYPES } from './types/client.type.js';
 import { PROVIDERS } from './types/provider.type.js';
+
+type OAuthErrorCode =
+  | 'invalid_state'
+  | 'authorization_declined'
+  | 'consents_required'
+  | 'already_linked'
+  | 'unsupported_client_type'
+  | 'connection_failed';
 
 @ApiTags('OAuth')
 @Controller('oauth')
@@ -42,37 +52,123 @@ export class OauthController {
     private readonly backfillService: BackfillService,
   ) {}
 
-  private sendResult(res: Response, success: boolean, status: HttpStatus) {
-    const frontend = new URL(process.env.FRONTEND_URL!);
-    const targetOrigin = JSON.stringify(frontend.origin);
-    const returnUrl = new URL('/connected-accounts', frontend).href;
-    res.status(status).type('html').send(`<!doctype html>
-      <html lang="ru"><meta charset="utf-8"><title>Подключение Polar</title>
-      <body><h1>${success ? 'Аккаунт Polar связан' : 'Не удалось подключить Polar'}</h1>
-      <p>${success ? 'Можно вернуться в Arbitrator.' : 'Вернитесь в Arbitrator и повторите подключение.'}</p>
-      <a href="${returnUrl}">Вернуться в Arbitrator</a>
-      <script>
-        if (window.opener) {
-          window.opener.postMessage({type: 'OAUTH_CONNECT', success: ${success}}, ${targetOrigin});
-          window.close();
-        }
-      </script></body></html>`);
+  /**
+   * Редирект на фронтенд после завершения OAuth.
+   *
+   *   Успех:  /connected-accounts?polar=connected
+   *   Ошибка: /connected-accounts?polar=error&reason=<code>
+   */
+  private redirectToFrontend(
+    res: Response,
+    success: boolean,
+    errorCode: OAuthErrorCode | null = null,
+  ): void {
+    const frontendUrl = new URL(process.env.FRONTEND_URL!);
+    const target = new URL('/connected-accounts', frontendUrl);
+
+    if (success) {
+      target.searchParams.set('polar', 'connected');
+    } else {
+      target.searchParams.set('polar', 'error');
+      if (errorCode) target.searchParams.set('reason', errorCode);
+    }
+
+    res.redirect(HttpStatus.FOUND, target.href);
   }
 
-  private sendErrorResponse(res: Response, _error: string, status: HttpStatus) {
-    this.sendResult(res, false, status);
+  private redirectError(res: Response, code: OAuthErrorCode): void {
+    this.redirectToFrontend(res, false, code);
   }
 
-  private sendSuccessResponse(res: Response) {
-    this.sendResult(res, true, HttpStatus.OK);
+  private redirectSuccess(res: Response): void {
+    this.redirectToFrontend(res, true);
+  }
+
+  /**
+   * Локальный сброс связки Polar.
+   *
+   * Мы не вызываем DELETE /v3/users/{polar-user-id} — это может
+   * сломать повторную регистрацию (Polar вернёт 403). Достаточно
+   * удалить локальные токены; при следующем OAuth-флоу Polar выдаст
+   * новый access token, а POST /v3/users отработает идемпотентно.
+   */
+  private async resetPolarLink(userId: string): Promise<void> {
+    try {
+      await this.oauthTokenService.revokeToken(userId, 'polar');
+      this.logger.log(`Local Polar tokens revoked for user=${userId}`);
+    } catch (error) {
+      this.logger.warn(
+        `revokeToken failed for user=${userId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @Post('disconnect')
+  @ApiOperation({
+    summary: 'Полный сброс связки Polar',
+    description: `Очищает сохранённые токены. После этого можно заново
+                  пройти OAuth-флоу.`,
+  })
+  @ApiOkResponse({
+    description: 'Связка сброшена (или уже отсутствовала)',
+    schema: {
+      type: 'object',
+      properties: {
+        ok: { type: 'boolean', example: true },
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Пользователь не авторизован',
+  })
+  async disconnect(@UserId() userId: string) {
+    await this.resetPolarLink(userId);
+    return { ok: true };
   }
 
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
   @Get('status')
+  @ApiOperation({
+    summary: 'Актуальный статус связки Polar',
+    description: `Проверяет состояние пользователя на стороне Polar через
+                  GET /v3/users/{polar-user-id}.`,
+  })
   async status(@UserId() userId: string) {
-    const token = await this.oauthTokenService.getAccessToken(userId, 'polar');
-    return { polar: { connected: Boolean(token) } };
+    const stored = await this.oauthTokenService.getTokens(userId, 'polar');
+
+    if (!stored) {
+      return { polar: { connected: false, reason: 'not_linked' as const } };
+    }
+
+    // Без externalUserId проверить статус на стороне Polar нельзя.
+    if (!stored.externalUserId) {
+      return { polar: { connected: null, reason: 'unknown' as const } };
+    }
+
+    try {
+      const state = await this.polarApiService.getPolarUserStatus(
+        stored.externalUserId,
+        stored.accessToken,
+      );
+
+      return {
+        polar: {
+          connected: state === 'connected',
+          reason: state,
+        },
+      };
+    } catch (error) {
+      this.logger.error(
+        `Polar status check failed for user=${userId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      return { polar: { connected: null, reason: 'unknown' as const } };
+    }
   }
 
   @UseGuards(JwtAuthGuard)
@@ -80,39 +176,30 @@ export class OauthController {
   @Get('connect')
   @ApiOperation({
     summary: 'Получить URL для OAuth-авторизации',
-    description: `Генерирует URL для перенаправления пользователя на страницу авторизации выбранного провайдера.
-                  Создает state параметр для безопасности OAuth потока и сохраняет его в кеше с данными пользователя.`,
+    description: `Генерирует URL для редиректа пользователя на страницу авторизации
+                  выбранного провайдера.`,
   })
   @ApiQuery({
     name: 'provider',
     required: true,
     enum: PROVIDERS,
-    description: 'Провайдер OAuth (например: polar, garmin)',
   })
   @ApiQuery({
     name: 'client_type',
     required: true,
     enum: CLIENT_TYPES,
-    description: 'Тип клиента (web или mobile)',
   })
   @ApiOkResponse({
     description: 'URL для OAuth-авторизации',
     schema: {
       type: 'object',
       properties: {
-        url: {
-          type: 'string',
-          example: 'https://provider.com/oauth/authorize?state=abc123',
-        },
+        url: { type: 'string' },
       },
     },
   })
-  @ApiUnauthorizedResponse({
-    description: 'Пользователь не авторизован',
-  })
-  @ApiInternalServerErrorResponse({
-    description: 'Внутренняя ошибка сервера при генерации URL авторизации',
-  })
+  @ApiUnauthorizedResponse({ description: 'Пользователь не авторизован' })
+  @ApiInternalServerErrorResponse({ description: 'Внутренняя ошибка' })
   async connect(
     @UserId() userId: string,
     @Query() queryParams: OauthConnectQueryDto,
@@ -132,107 +219,125 @@ export class OauthController {
   @Get('callback')
   @ApiOperation({
     summary: 'Callback endpoint для обработки OAuth редиректа',
-    description: `Endpoint для обработки callback от OAuth провайдера после авторизации пользователя.
-                  Выполняет следующие действия:
-                  1. Проверяет state параметр для безопасности
-                  2. Обменивает код авторизации на access token
-                  3. Регистрирует пользователя в Polar API
-                  4. Сохраняет OAuth токены
-                  5. Ставит в очередь задания на обработку всех тренировок (backfill)
-                  6. Возвращает HTML страницу которая закрывает окно и сообщает результат в родительское окно`,
+    description: `Обрабатывает callback от OAuth-провайдера после авторизации.
+
+                  Порядок (v3 API):
+                  1. Проверка state (CSRF)
+                  2. Обмен кода на access token (v3 token endpoint).
+                     В v3-ответе приходит x_user_id — это polar-user-id.
+                  3. Идемпотентная регистрация через POST /v3/users.
+                     Если пользователь уже зарегистрирован — Polar вернёт 200
+                     с тем же polar-user-id, ошибки не будет.
+                  4. Сохранение токенов и polar-user-id в БД
+                  5. Backfill тренировок
+                  6. Редирект (302) на /connected-accounts`,
   })
   @ApiQuery({
     name: 'code',
     required: true,
-    description: 'Код авторизации, полученный от OAuth провайдера',
-    example: 'abc123def456',
+    description: 'Код авторизации',
   })
   @ApiQuery({
     name: 'state',
     required: true,
-    description: 'State параметр для защиты от CSRF атак',
-    example: 'a1b2c3d4e5f6',
+    description: 'State-параметр',
   })
-  @ApiResponse({
-    status: 200,
-    description: `Успешная OAuth авторизация. Возвращает HTML страницу которая:
-                  - Отправляет сообщение об успехе в родительское окно
-                  - Закрывает текущее окно`,
-    content: {
-      'text/html': {
-        example: `
-          <script>
-            window.opener.postMessage({ 
-              type: 'OAUTH_CONNECT', 
-              success: true 
-            }, '*');
-            window.close();
-          </script>
-        `,
-      },
-    },
+  @ApiFoundResponse({
+    description: `302-редирект на фронтенд.`,
   })
-  @ApiBadRequestResponse({
-    description: `Неверные параметры запроса:
-                  - Невалидный state параметр
-                  - Неподдерживаемый client_type
-                  - Отсутствует код авторизации`,
-    content: {
-      'text/html': {
-        example: `
-          <script>
-            window.opener.postMessage({ 
-              type: 'OAUTH_CONNECT', 
-              success: false, 
-              error: "invalid state" 
-            }, '*');
-            window.close();
-          </script>
-        `,
-      },
-    },
-  })
-  @ApiInternalServerErrorResponse({
-    description: `Ошибка при обработке OAuth callback:
-                  - Ошибка обмена кода на токен
-                  - Ошибка регистрации пользователя в Polar API
-                  - Ошибка сохранения токенов в БД`,
-    content: {
-      'text/html': {
-        example: `
-          <script>
-            window.opener.postMessage({ 
-              type: 'OAUTH_CONNECT', 
-              success: false, 
-              error: "Internal server error" 
-            }, '*');
-            window.close();
-          </script>
-        `,
-      },
-    },
-  })
+  @ApiBadRequestResponse({ description: 'Неверные параметры запроса' })
+  @ApiInternalServerErrorResponse({ description: 'Ошибка обработки callback' })
   async callback(
     @Query() queryParams: OauthCallbackQueryDto,
     @Res() res: Response,
   ): Promise<void> {
+    this.logger.log(
+      `OAuth callback received | ` +
+        `state=${String(queryParams.state ?? '<none>')} ` +
+        `has_code=${String(Boolean(queryParams.code))} ` +
+        `error=${String(queryParams.error ?? '<none>')} ` +
+        `error_description=${String(queryParams.error_description ?? '<none>')} ` +
+        `error_uri=${String(queryParams.error_uri ?? '<none>')}`,
+    );
+
     try {
       const stateData = await this.oauthService.getState(queryParams.state);
 
       if (!stateData) {
-        this.sendErrorResponse(res, 'invalid state', HttpStatus.BAD_REQUEST);
+        this.logger.warn(
+          `OAuth callback: invalid or expired state | ` +
+            `state=${String(queryParams.state)}`,
+        );
+        this.redirectError(res, 'invalid_state');
         return;
       }
-      await this.oauthService.deleteState(queryParams.state);
+
+      this.logger.log(
+        `OAuth callback: state resolved | ` +
+          `userId=${String(stateData.userId)} ` +
+          `provider=${String(stateData.provider)} ` +
+          `client_type=${String(stateData.client_type)}`,
+      );
 
       if (queryParams.error || !queryParams.code) {
-        this.sendErrorResponse(
-          res,
-          'Authorization declined',
-          HttpStatus.BAD_REQUEST,
+        const err = queryParams.error;
+        const description = queryParams.error_description;
+
+        if (err === 'access_denied') {
+          this.logger.warn(
+            `OAuth callback: Polar denied access | ` +
+              `userId=${String(stateData.userId)} ` +
+              `provider=${String(stateData.provider)} ` +
+              `error=${String(err)} ` +
+              `description=${String(description ?? '<none>')} ` +
+              `(most likely missing mandatory consents on Polar side)`,
+          );
+          await this.oauthService.deleteState(queryParams.state);
+          this.redirectError(res, 'consents_required');
+          return;
+        }
+
+        if (err) {
+          this.logger.warn(
+            `OAuth callback: provider returned error | ` +
+              `userId=${String(stateData.userId)} ` +
+              `provider=${String(stateData.provider)} ` +
+              `error=${String(err)} ` +
+              `description=${String(description ?? '<none>')}`,
+          );
+          await this.oauthService.deleteState(queryParams.state);
+          this.redirectError(res, 'authorization_declined');
+          return;
+        }
+
+        this.logger.warn(
+          `OAuth callback: no code and no error in callback | ` +
+            `userId=${String(stateData.userId)} ` +
+            `provider=${String(stateData.provider)} ` +
+            `state=${String(queryParams.state)}`,
         );
+        await this.oauthService.deleteState(queryParams.state);
+        this.redirectError(res, 'connection_failed');
         return;
       }
+
+      await this.oauthService.deleteState(queryParams.state);
+
+      if (stateData.client_type !== 'web') {
+        this.logger.warn(
+          `OAuth callback: unsupported client_type | ` +
+            `userId=${String(stateData.userId)} ` +
+            `client_type=${String(stateData.client_type)}`,
+        );
+        this.redirectError(res, 'unsupported_client_type');
+        return;
+      }
+
+      this.logger.log(
+        `OAuth callback: exchanging code for tokens | ` +
+          `userId=${String(stateData.userId)} ` +
+          `provider=${String(stateData.provider)}`,
+      );
 
       const tokens = await this.oauthService.exchangeCode(
         stateData.provider,
@@ -240,52 +345,132 @@ export class OauthController {
         queryParams.state,
       );
 
-      await this.polarApiService.registerUser(
-        tokens.access_token,
-        stateData.userId.toString(),
-        String(tokens.x_user_id),
+      // v3 token response содержит x_user_id. Если он есть —
+      // это и есть polar-user-id, который затем приходит
+      // как `user_id` в вебхуках.
+      let polarUserId: string =
+        tokens.x_user_id != null ? String(tokens.x_user_id) : '';
+
+      this.logger.log(
+        `OAuth callback: token exchange succeeded | ` +
+          `userId=${String(stateData.userId)} ` +
+          `expires_in=${String(tokens.expires_in)} ` +
+          `x_user_id=${polarUserId || '<none>'}`,
       );
+
+      // ── Регистрация пользователя в Polar (v3) ──
+      // POST /v3/users идемпотентен:
+      //   - 201 Created — новый пользователь, возвращает polar-user-id;
+      //   - 200 OK     — уже был зарегистрирован, возвращает тот же ID.
+      // Вызываем его всегда, чтобы зафиксировать факт регистрации,
+      // даже если x_user_id уже был в токене.
+      try {
+        const registeredId = await this.polarApiService.registerUser(
+          tokens.access_token,
+          stateData.userId.toString(),
+          polarUserId || undefined,
+        );
+        polarUserId = registeredId;
+        this.logger.log(
+          `OAuth callback: Polar user registration ok | ` +
+            `userId=${String(stateData.userId)} ` +
+            `polarUserId=${polarUserId}`,
+        );
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+
+        // Пользователь уже зарегистрирован — это не ошибка.
+        // Используем polarUserId из токена, если он был.
+        if (
+          message.includes('already registered') ||
+          message.includes('duplicated member-id')
+        ) {
+          if (polarUserId) {
+            this.logger.log(
+              `User ${stateData.userId} already registered in Polar; ` +
+                `using polarUserId from token: ${polarUserId}`,
+            );
+          } else {
+            this.logger.warn(
+              `User ${stateData.userId} already registered in Polar, ` +
+                `but x_user_id is missing — backfill will be skipped`,
+            );
+          }
+        }
+        // Polar уже привязан к другому member.
+        else if (message.includes('linked to another member')) {
+          this.logger.warn(
+            `OAuth callback: Polar account already linked | ` +
+              `userId=${String(stateData.userId)} ` +
+              `message=${message}`,
+          );
+          await this.resetPolarLink(stateData.userId);
+          this.redirectError(res, 'already_linked');
+          return;
+        }
+        // Согласия не приняты (403).
+        else if (message.includes('forbidden') || message.includes('403')) {
+          this.logger.warn(
+            `OAuth callback: consents missing on Polar side | ` +
+              `userId=${String(stateData.userId)} ` +
+              `message=${message}`,
+          );
+          await this.resetPolarLink(stateData.userId);
+          this.redirectError(res, 'consents_required');
+          return;
+        }
+        // Прочие ошибки — пробрасываем.
+        else {
+          this.logger.error(
+            `OAuth callback: registerUser failed unexpectedly | ` +
+              `userId=${String(stateData.userId)} ` +
+              `message=${message}`,
+            error instanceof Error ? error.stack : undefined,
+          );
+          throw error;
+        }
+      }
 
       await this.oauthTokenService.storeTokens({
         serviceName: stateData.provider,
         userId: stateData.userId,
         accessToken: tokens.access_token,
         expiresIn: tokens.expires_in,
-        externalUserId: String(tokens.x_user_id),
+        externalUserId: polarUserId || undefined,
       });
 
-      // Fire-and-forget: ставим в очередь все тренировки за 90 дней.
-      // Пользователь не должен ждать — обработка пойдёт асинхронно
-      // через тот же пайплайн, что и реальные Polar-вебхуки.
-      void this.backfillService
-        .enqueueAllExercises(String(tokens.x_user_id), tokens.access_token)
-        .catch((err: unknown) => {
-          this.logger.error(
-            `Backfill enqueue failed for polarUserId=${tokens.x_user_id}`,
-            err instanceof Error ? err.stack : String(err),
-          );
-        });
+      this.logger.log(
+        `OAuth callback: tokens stored | ` +
+          `userId=${String(stateData.userId)} ` +
+          `provider=${String(stateData.provider)} ` +
+          `polarUserId=${polarUserId || '<none>'}`,
+      );
 
-      if (stateData.client_type === 'web') {
-        this.sendSuccessResponse(res);
-        return;
+      // Backfill запускаем только если polarUserId известен —
+      // иначе события уйдут с user_id=NaN и не найдут пользователя.
+      if (polarUserId) {
+        void this.backfillService
+          .enqueueAllExercises(polarUserId, tokens.access_token)
+          .catch((err: unknown) => {
+            this.logger.error(
+              `Backfill enqueue failed for polarUserId=${polarUserId}`,
+              err instanceof Error ? err.stack : String(err),
+            );
+          });
       } else {
-        this.sendErrorResponse(
-          res,
-          'Unsupported client type',
-          HttpStatus.BAD_REQUEST,
+        this.logger.warn(
+          `OAuth callback: skipping backfill — polarUserId not available | ` +
+            `userId=${String(stateData.userId)}`,
         );
-        return;
       }
-    } catch {
+
+      this.redirectSuccess(res);
+    } catch (error) {
       this.logger.error(
         'OAuth callback failed; returning failure to the frontend',
+        error instanceof Error ? error.stack : String(error),
       );
-      this.sendErrorResponse(
-        res,
-        'Connection failed',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      this.redirectError(res, 'connection_failed');
     }
   }
 }

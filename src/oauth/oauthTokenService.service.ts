@@ -6,6 +6,11 @@ import { TokenStorageArgs } from './interfaces/tokenStorageArg.interface.js';
 import { ProviderType } from './types/provider.type.js';
 import { OAuthToken } from './entities/oAuthToken.entity.js';
 
+export interface StoredTokens {
+  accessToken: string;
+  externalUserId: string;
+}
+
 @Injectable()
 export class OAuthTokenService {
   constructor(
@@ -42,7 +47,7 @@ export class OAuthTokenService {
 
   async getAccessToken(
     userId: string,
-    serviceName: string,
+    serviceName: ProviderType,
   ): Promise<string | null> {
     const tokenEntity = await this.oauthTokenRepo.findAccessToken(
       userId,
@@ -58,6 +63,40 @@ export class OAuthTokenService {
       tokenEntity.ivAccess,
       tokenEntity.authTagAccess,
     );
+  }
+
+  /**
+   * Возвращает расшифрованный access token и externalUserId одним запросом.
+   *
+   * Используется там, где для проверки статуса на стороне провайдера
+   * нужны оба значения одновременно (например, GET /v3/users/{id} в Polar).
+   *
+   * Возвращает null, если записи нет или не сохранён externalUserId —
+   * в обоих случаях проверить статус невозможно.
+   */
+  async getTokens(
+    userId: string,
+    serviceName: ProviderType,
+  ): Promise<StoredTokens | null> {
+    const tokenEntity = await this.oauthTokenRepo.findAccessToken(
+      userId,
+      serviceName,
+    );
+
+    if (!tokenEntity || !tokenEntity.externalUserId) {
+      return null;
+    }
+
+    const accessToken = this.tokenEncryptionService.decryptToken(
+      tokenEntity.encryptedAccessToken,
+      tokenEntity.ivAccess,
+      tokenEntity.authTagAccess,
+    );
+
+    return {
+      accessToken,
+      externalUserId: tokenEntity.externalUserId,
+    };
   }
 
   async getRefreshToken(
@@ -80,7 +119,7 @@ export class OAuthTokenService {
     );
   }
 
-  async revokeToken(userId: string, serviceName: string): Promise<void> {
+  async revokeToken(userId: string, serviceName: ProviderType): Promise<void> {
     await this.oauthTokenRepo.revokeToken(userId, serviceName);
   }
 
@@ -125,7 +164,7 @@ export class OAuthTokenService {
 
   async updateExternalUserId(
     userId: string,
-    serviceName: string,
+    serviceName: ProviderType,
     externalUserId: string,
   ): Promise<void> {
     await this.oauthTokenRepo.updateExternalUserId(
