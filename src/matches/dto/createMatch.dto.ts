@@ -1,6 +1,6 @@
 // src/matches/dto/createMatch.dto.ts
 
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, OmitType } from '@nestjs/swagger';
 import {
   IsUUID,
   IsDateString,
@@ -115,3 +115,6 @@ export class CreateMatchDto {
   @IsUUID()
   awayTeamId?: string | null;
 }
+
+/** Вложенный маршрут получает stageId из URL до вызова сервиса. */
+export class CreateMatchInStageDto extends OmitType(CreateMatchDto, ['stageId'] as const) {}

@@ -31,7 +31,7 @@ import {
 } from '@nestjs/swagger';
 import { MATCHES_SERVICE } from './tokens.js';
 import type { MatchService } from './match.service.js';
-import { CreateMatchDto } from './dto/createMatch.dto.js';
+import { CreateMatchInStageDto } from './dto/createMatch.dto.js';
 import { UpdateMatchDto } from './dto/updateMatch.dto.js';
 import { MatchResponseDto } from './dto/matchResponse.dto.js';
 import { PaginatedMatchResponseDto } from './dto/paginated-match-response.dto.js';
@@ -90,7 +90,7 @@ export class MatchController {
       'из stage на бэкенде.',
   })
   @ApiParam({ name: 'stageId', type: 'string', format: 'uuid' })
-  @ApiBody({ type: CreateMatchDto })
+  @ApiBody({ type: CreateMatchInStageDto })
   @ApiCreatedResponse({
     description: 'Матч успешно создан',
     type: MatchResponseDto,
@@ -105,7 +105,7 @@ export class MatchController {
   })
   async createInStage(
     @Param('stageId', ParseUUIDPipe) stageId: string,
-    @Body() dto: CreateMatchDto,
+    @Body() dto: CreateMatchInStageDto,
   ): Promise<MatchResponseDto> {
     // stageId подставляем в DTO: он приходит из URL, а не из тела.
     // Если клиент передал другой stageId в теле — игнорируем.
