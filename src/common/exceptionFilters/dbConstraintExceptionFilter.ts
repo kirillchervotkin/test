@@ -43,16 +43,32 @@ export class DbConstraintExceptionFilter implements ExceptionFilter {
   ) {}
 
   async catch(error: Error, host: ArgumentsHost): Promise<void> {
+    // ---- Extract the target exception from the wrapper ----
     let targetError = error;
-    const seen = new Set<Error>();
-    while (
-      !(targetError instanceof DbUniqueViolationException) &&
-      !(targetError instanceof DbForeignKeyViolationException) &&
-      targetError.cause instanceof Error &&
-      !seen.has(targetError)
-    ) {
-      seen.add(targetError);
-      targetError = targetError.cause;
+
+    // Safely check for the presence of a `cause` field (compatible with older ES versions)
+    if (error && typeof error === 'object' && 'cause' in error) {
+      const cause = (error as { cause?: unknown }).cause;
+      if (cause) {
+        // Primary path: using instanceof
+        if (
+          cause instanceof DbUniqueViolationException ||
+          cause instanceof DbForeignKeyViolationException
+        ) {
+          targetError = cause;
+        }
+        // Fallback for cases where instanceof fails (e.g., different module contexts)
+        else if (
+          typeof cause === 'object' &&
+          cause !== null &&
+          'fields' in cause &&
+          'constraintName' in cause
+        ) {
+          targetError = cause as unknown as
+            | DbUniqueViolationException
+            | DbForeignKeyViolationException;
+        }
+      }
     }
 
     // Delegate unrelated exceptions to Nest instead of rejecting the filter promise.
@@ -78,7 +94,7 @@ export class DbConstraintExceptionFilter implements ExceptionFilter {
     const validationMessages = store?.validationMessages ?? {};
 
     const baseUrl = this.exceptionUtils.buildBaseUrl(request);
-    const lang = request.headers['accept-language']?.split(',')[0] ?? 'ru';
+    const lang = request.headers['accept-language']?.split(',')[0] ?? 'en';
 
     const fields = targetError.fields.map((f) => f.dbField);
     const values = targetError.fields.map((f) => f.value ?? '');

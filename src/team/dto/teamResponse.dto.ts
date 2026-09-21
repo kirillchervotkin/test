@@ -1,30 +1,31 @@
+// src/teams/dto/teamResponse.dto.ts
+
 import { ApiProperty } from '@nestjs/swagger';
 
 export class TeamResponseDto {
   @ApiProperty({
-    description: 'ID команды',
+    description: 'Уникальный идентификатор команды',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
   id: string;
 
-  @ApiProperty({ description: 'Название команды', example: 'Спартак' })
+  @ApiProperty({
+    description: 'Полное название команды',
+    example: 'Зенит',
+  })
   name: string;
 
   @ApiProperty({
-    description: 'UUID города',
-    format: 'uuid',
+    description: 'Короткое название для UI-таблиц',
+    example: 'ЗЕН',
+    nullable: true,
   })
-  cityId: string;
+  shortName: string | null;
 
   @ApiProperty({
-    description: 'Дата создания',
-    example: '2023-09-19T20:00:00.000Z',
+    description: 'ID домашнего города команды',
+    example: '550e8400-e29b-41d4-a716-446655440001',
+    nullable: true,
   })
-  createdAt: string;
-
-  @ApiProperty({
-    description: 'Дата обновления',
-    example: '2023-09-19T20:00:00.000Z',
-  })
-  updatedAt: string;
+  cityId: string | null;
 }

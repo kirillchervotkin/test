@@ -1,24 +1,36 @@
+// src/cities/dto/cityResponse.dto.ts
+
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CityResponseDto {
   @ApiProperty({
-    description: 'ID города',
+    description: 'Уникальный идентификатор города',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
   id: string;
 
-  @ApiProperty({ description: 'Название города', example: 'Москва' })
+  @ApiProperty({
+    description: 'Название города',
+    example: 'Москва',
+  })
   name: string;
 
   @ApiProperty({
-    description: 'Дата создания',
-    example: '2023-09-19T20:00:00.000Z',
+    description: 'Регион/область/край',
+    example: 'Московская область',
+    nullable: true,
   })
-  createdAt: string;
+  region: string | null;
 
   @ApiProperty({
-    description: 'Дата обновления',
-    example: '2023-09-19T20:00:00.000Z',
+    description: 'Дата и время создания записи',
+    example: '2023-06-15T10:00:00.000Z',
   })
-  updatedAt: string;
+  createdAt: Date;
+
+  @ApiProperty({
+    description: 'Дата и время последнего обновления',
+    example: '2023-06-15T10:00:00.000Z',
+  })
+  updatedAt: Date;
 }

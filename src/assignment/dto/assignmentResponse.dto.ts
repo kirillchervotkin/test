@@ -1,30 +1,38 @@
+// src/assignments/dto/assignmentResponse.dto.ts
+
 import { ApiProperty } from '@nestjs/swagger';
 
+/**
+ * DTO ответа для назначения (базовый, без деталей).
+ *
+ * Используется в CRUD-контроллере: `GET /matches/:matchId/assignments`,
+ * `PATCH /assignments/:id` и т.д.
+ *
+ * Для отображения с ФИО судьи и названием роли используется
+ * `AssignmentWithDetailsResponseDto` (в MatchCrewController).
+ */
 export class AssignmentResponseDto {
-  @ApiProperty({ description: 'ID назначения', example: 1 })
-  id: number;
+  @ApiProperty({
+    description: 'Уникальный идентификатор назначения',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  id: string;
 
-  @ApiProperty({ description: 'ID матча Uint64', example: '1', type: String })
+  @ApiProperty({
+    description: 'ID матча',
+    example: '550e8400-e29b-41d4-a716-446655440001',
+  })
   matchId: string;
 
-  @ApiProperty({ description: 'ID пользователя', example: 1 })
-  userId: number;
+  @ApiProperty({
+    description: 'ID судьи (пользователя)',
+    example: '550e8400-e29b-41d4-a716-446655440002',
+  })
+  userId: string;
 
   @ApiProperty({
     description: 'ID роли на поле',
-    example: 1,
+    example: '550e8400-e29b-41d4-a716-446655440003',
   })
-  fieldRoleId: number;
-
-  @ApiProperty({
-    description: 'Дата создания назначения',
-    example: '2023-09-01T00:00:00.000Z',
-  })
-  createdAt: string;
-
-  @ApiProperty({
-    description: 'Дата обновления назначения',
-    example: '2023-09-01T00:00:00.000Z',
-  })
-  updatedAt: string;
+  fieldRoleId: string;
 }

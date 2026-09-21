@@ -5,7 +5,7 @@ import { TeamResponseDto } from '../dto/teamResponse.dto.js';
 export interface TeamService {
   create(createTeamDto: CreateTeamDto): Promise<TeamResponseDto>;
   findAll(): Promise<TeamResponseDto[]>;
-  findOne(id: string): Promise<TeamResponseDto>;
-  update(id: string, updateTeamDto: UpdateTeamDto): Promise<TeamResponseDto>;
-  remove(id: string): Promise<void>;
+  findOne(id: number): Promise<TeamResponseDto>;
+  update(id: number, updateTeamDto: UpdateTeamDto): Promise<TeamResponseDto>;
+  remove(id: number): Promise<void>;
 }

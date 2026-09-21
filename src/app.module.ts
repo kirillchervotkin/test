@@ -11,10 +11,13 @@ import { ListModule } from './list/list.module.js';
 
 import { WebhookModule } from './webhook/webhook.module.js';
 import { AdminInitializationService } from './adminInit.service.js';
-import { ScheduleModule } from './schedule/schedule.module.js';
+import { TournamentModule } from './tournaments/tournament.module.js';
 import { TeamModule } from './team/team.module.js';
 import { CityModule } from './city/city.module.js';
-import { GroupModule } from './group/group.module.js';
+import { StagesModule } from './stages/stage.module.js';
+import { MatchModule } from './matches/match.module.js';
+import { FieldRoleModule } from './fieldRole/fieldRole.module.js';
+import { AssignmentModule } from './assignment/assignment.module.js';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { ValidationExceptionFilter } from './common/exceptionFilters/validationExceptionFilter.js';
 import { ExceptionUtilsService } from './common/exceptionFilters/exception-utils.service.js';
@@ -133,13 +136,17 @@ const __dirname = dirname(__filename);
     PolarApiModule,
     AnthropometryModule,
     ListModule,
-    AnthropometryModule,
     WebhookModule,
     ReportModule,
-    ScheduleModule,
-    TeamModule,
+
+    // === Доменные модули календаря и судейства ===
+    TournamentModule,
+    StagesModule,
     CityModule,
-    GroupModule,
+    TeamModule,
+    MatchModule,
+    FieldRoleModule,
+    AssignmentModule,
     UserListModule,
     TrainingCampsModule,
     AttemptsModule,

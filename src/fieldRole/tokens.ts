@@ -1,1 +1,10 @@
-export const FIELD_ROLE_SERVICE = 'FIELD_ROLE_SERVICE';
+// src/field-roles/tokens.ts
+
+/**
+ * DI-токены модуля ролей на поле.
+ *
+ * Используются для инъекции сервиса через интерфейс, а не через
+ * конкретный класс. Это позволяет подменить реализацию без
+ * изменения потребителей (например, при тестировании).
+ */
+export const FIELD_ROLES_SERVICE = Symbol('FIELD_ROLES_SERVICE');

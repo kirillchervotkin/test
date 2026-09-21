@@ -1,33 +1,37 @@
+// src/teams/dto/createTeam.dto.ts
+
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, MaxLength, IsUUID } from 'class-validator';
-import { Constraint } from '../../common/decorators/unique.decorator.js';
-import { vMsg } from '../../common/utils/validation-message.js';
+import { IsString, IsOptional, IsUUID, MaxLength } from 'class-validator';
 
 export class CreateTeamDto {
   @ApiProperty({
-    description: 'Название команды',
-    example: 'Спартак',
+    description: 'Полное название команды',
+    example: 'Зенит',
   })
-  @IsString({ message: vMsg('validation.IS_STRING') })
-  @IsNotEmpty({ message: vMsg('validation.NOT_EMPTY') })
-  @MaxLength(100, { message: vMsg('validation.MAX_LENGTH') })
-  @Constraint({
-    dbField: 'name',
-    messages: { uniqueComposite: 'validation.UNIQUE_TEAM_CITY' },
-  })
+  @IsString()
+  @MaxLength(255)
   name: string;
 
   @ApiProperty({
-    description: 'ID города',
+    description: 'Короткое название для UI-таблиц (необязательно)',
+    example: 'ЗЕН',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  shortName?: string | null;
+
+  @ApiProperty({
+    description:
+      'ID домашнего города команды (необязательно). ' +
+      'Может отсутствовать, например, для сборных.',
     example: '550e8400-e29b-41d4-a716-446655440000',
+    required: false,
+    nullable: true,
   })
-  @IsUUID('4', { message: vMsg('validation.IS_UUID') })
-  @Constraint({
-    dbField: 'cityId',
-    messages: {
-      foreignKey: 'validation.CITY_NOT_FOUND',
-      uniqueComposite: 'validation.UNIQUE_TEAM_CITY',
-    },
-  })
-  cityId: string;
+  @IsOptional()
+  @IsUUID()
+  cityId?: string | null;
 }

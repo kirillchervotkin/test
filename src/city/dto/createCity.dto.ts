@@ -1,17 +1,25 @@
+// src/cities/dto/createCity.dto.ts
+
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, MaxLength } from 'class-validator';
-import { Constraint } from '../../common/decorators/unique.decorator.js';
-import { vMsg } from '../../common/utils/validation-message.js';
+import { IsString, IsOptional, MaxLength } from 'class-validator';
 
 export class CreateCityDto {
-  @ApiProperty({ description: 'Название города', example: 'Москва' })
-  @Constraint({
-    messages: {
-      unique: 'validation.UNIQUE_CITY',
-    },
+  @ApiProperty({
+    description: 'Название города',
+    example: 'Москва',
   })
-  @IsString({ message: vMsg('validation.IS_STRING') })
-  @IsNotEmpty({ message: vMsg('validation.NOT_EMPTY') })
-  @MaxLength(100, { message: vMsg('validation.MAX_LENGTH') })
+  @IsString()
+  @MaxLength(255)
   name: string;
+
+  @ApiProperty({
+    description: 'Регион/область/край (необязательно)',
+    example: 'Московская область',
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  region?: string | null;
 }

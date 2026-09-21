@@ -1,27 +1,29 @@
+// src/field-roles/dto/fieldRoleResponse.dto.ts
+
 import { ApiProperty } from '@nestjs/swagger';
 
 export class FieldRoleResponseDto {
   @ApiProperty({
-    description: 'ID роли',
-    example: 1,
+    description: 'Уникальный идентификатор роли',
+    example: '550e8400-e29b-41d4-a716-446655440000',
   })
-  id: number;
+  id: string;
 
   @ApiProperty({
-    description: 'Название роли',
+    description: 'Программный код роли',
+    example: 'REFEREE',
+  })
+  code: string;
+
+  @ApiProperty({
+    description: 'Отображаемое имя на русском',
     example: 'Главный судья',
   })
   name: string;
 
   @ApiProperty({
-    description: 'Дата создания',
-    example: '2022-01-01T00:00:00.000Z',
+    description: 'Порядок отображения в UI',
+    example: 1,
   })
-  createdAt: string;
-
-  @ApiProperty({
-    description: 'Дата последнего обновления',
-    example: '2022-01-01T00:00:00.000Z',
-  })
-  updatedAt: string;
+  sortOrder: number;
 }

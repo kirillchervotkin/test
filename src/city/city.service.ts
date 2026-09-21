@@ -1,48 +1,136 @@
-import { Injectable, Logger } from '@nestjs/common';
-import type { CreateCityDto } from './dto/createCity.dto.js';
-import type { UpdateCityDto } from './dto/updateCity.dto.js';
-import type { CityResponseDto } from './dto/cityResponse.dto.js';
-import type { CityService } from './interfaces/cityService.interface.js';
+// src/cities/city.service.ts
+
+import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  City,
+  CreateCityData,
+  UpdateCityData,
+  CityFilters,
+} from './entities/types/city.types.js';
 import { CityRepository } from './repository/city.repository.js';
-import { CityMapper } from './mappers/city.mapper.js';
-import { ReferenceValidation as V } from '../common/references/reference-validation.js';
+
+/**
+ * Сервис управления городами.
+ *
+ * Тонкая обёртка над {@link CityRepository}. Вся работа с БД
+ * (транзакции, обработка unique-violation, retry через
+ * `idempotent: true`) инкапсулирована в репозитории — сервис не
+ * инжектит `DRIZZLE` и не открывает транзакции.
+ *
+ * Сервис добавляет только бизнес-семантику: перевод `null` в
+ * {@link NotFoundException}. Исключения уровня БД
+ * (`DbUniqueViolationException`, `DbForeignKeyViolationException`)
+ * не трогаются — они транслируются в HTTP глобальным фильтром.
+ *
+ * Город — глобальный справочник, не привязан к турниру.
+ * Поэтому нет compound-методов (в отличие от stage).
+ */
 @Injectable()
-export class YdbCityService implements CityService {
-  private readonly logger = new Logger(YdbCityService.name);
+export class CityService {
   constructor(private readonly repository: CityRepository) {}
-  async create(data: CreateCityDto): Promise<CityResponseDto> {
-    const name = await V.name(data.name);
-    const result = await CityMapper.toDto(await this.repository.save(name));
-    this.logger.log(`Создан город ${result.id}`);
-    return result;
+
+  // ============================================================
+  // CREATE
+  //
+  // Репозиторий генерирует UUID, проставляет createdAt/updatedAt
+  // и делает INSERT. При нарушении unique-ограничения бросает
+  // DbUniqueViolationException — фильтр превратит в 409.
+  // ============================================================
+  async create(data: CreateCityData): Promise<City> {
+    return this.repository.create(data);
   }
-  async findAll(): Promise<CityResponseDto[]> {
-    const rows = await this.repository.findAll();
-    rows.sort(
-      (a, b) => a.name.localeCompare(b.name, 'ru') || a.id.localeCompare(b.id),
+
+  // ============================================================
+  // FIND BY ID
+  //
+  // Возвращает `null`, если города нет. Контроллер сам решает,
+  // что с этим делать (обычно — NotFoundException).
+  // ============================================================
+  async findById(id: string): Promise<City | null> {
+    return this.repository.findById(id);
+  }
+
+  // ============================================================
+  // FIND BY NAME
+  //
+  // Точное совпадение по имени. Возвращает `null`, если города
+  // с таким именем нет. Используется для проверки дубликатов
+  // на уровне сервиса, если понадобится.
+  // ============================================================
+  async findByName(name: string): Promise<City | null> {
+    return this.repository.findByName(name);
+  }
+
+  // ============================================================
+  // SEARCH BY NAME
+  //
+  // Частичное совпадение (LIKE %query%) для автокомплита.
+  // Возвращает пустой массив, если ничего не найдено.
+  // ============================================================
+  async searchByName(query: string): Promise<City[]> {
+    return this.repository.searchByName(query);
+  }
+
+  // ============================================================
+  // FIND ALL (фильтры + сортировка, без пагинации)
+  //
+  // Городов в системе сотни максимум, поэтому пагинация не нужна.
+  // Отдаём всё сразу, с фильтрами и сортировкой.
+  // ============================================================
+  async findAll(params: {
+    filter?: CityFilters;
+    orderBy?: 'name' | 'region' | 'createdAt';
+    orderDir?: 'ASC' | 'DESC';
+  }): Promise<City[]> {
+    return this.repository.findAll(
+      params.filter,
+      params.orderBy ?? 'name',
+      params.orderDir ?? 'ASC',
     );
-    return Promise.all(rows.map((row) => CityMapper.toDto(row)));
   }
-  async findOne(id: string): Promise<CityResponseDto> {
-    return CityMapper.toDto(await this.repository.findById(await V.id(id)));
+
+  // ============================================================
+  // UPDATE PARTIAL
+  //
+  // Бросает NotFoundException, если города нет. `region` допускает
+  // явный `null` — «очистить регион».
+  //
+  // Двойная проверка `null` (на findById и на updatePartial) —
+  // как в TestTypeService.update: запись могли удалить между
+  // двумя вызовами.
+  // ============================================================
+  async update(data: UpdateCityData): Promise<City> {
+    const current = await this.repository.findById(data.id);
+    if (!current) {
+      throw new NotFoundException(`City with id ${data.id} not found`);
+    }
+
+    const updated = await this.repository.updatePartial(data);
+    if (!updated) {
+      // Запись могли удалить между findById и updatePartial —
+      // трактуем так же, как «не найдено».
+      throw new NotFoundException(`City with id ${data.id} not found`);
+    }
+    return updated;
   }
-  async update(id: string, data: UpdateCityDto): Promise<CityResponseDto> {
-    await V.id(id);
-    if (data.name === undefined) return this.findOne(id);
-    const result = await CityMapper.toDto(
-      await this.repository.save(await V.name(data.name), id),
-    );
-    this.logger.log(`Обновлена запись ${id}`);
-    return result;
-  }
-  async remove(id: string): Promise<void> {
-    await this.repository.delete(await V.id(id));
-    this.logger.log(`Удалена запись ${id}`);
-  }
-  async searchByName(name: string): Promise<CityResponseDto[]> {
-    const needle = name.trim().toLocaleLowerCase('ru');
-    return (await this.findAll()).filter((c) =>
-      c.name.toLocaleLowerCase('ru').includes(needle),
-    );
+
+  // ============================================================
+  // DELETE
+  //
+  // Репозиторий делает простое удаление. Проверка «есть ли матчи
+  // в этом городе» появится позже, когда будет MatchRepository.
+  // Тогда delete станет транзакционным и будет бросать
+  // DbForeignKeyViolationException при наличии ссылок.
+  //
+  // Если города нет — возвращает null, и сервис бросает
+  // NotFoundException.
+  // ============================================================
+  async delete(id: string): Promise<void> {
+    const deleted = await this.repository.delete(id);
+    if (!deleted) {
+      throw new NotFoundException(`City with id ${id} not found`);
+    }
+    // Foreign key violations (когда появятся) будут брошены
+    // репозиторием и проброшены вверх.
   }
 }

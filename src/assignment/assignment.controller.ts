@@ -1,143 +1,263 @@
+// src/assignments/assignment.controller.ts
+
 import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
-  ParseIntPipe,
+  Query,
+  UseGuards,
+  ParseUUIDPipe,
+  NotFoundException,
   HttpCode,
   HttpStatus,
   Inject,
-  Patch,
 } from '@nestjs/common';
 import {
   ApiTags,
+  ApiBearerAuth,
   ApiOperation,
+  ApiResponse,
   ApiParam,
   ApiBody,
-  ApiCreatedResponse,
-  ApiOkResponse,
-  ApiNotFoundResponse,
   ApiBadRequestResponse,
+  ApiNotFoundResponse,
   ApiConflictResponse,
+  ApiCreatedResponse,
+  ApiNoContentResponse,
 } from '@nestjs/swagger';
-import { CreateAssignmentDto } from './dto/createAssignment.dto.js';
-import { AssignmentResponseDto } from './dto/assignmentResponse.dto.js';
 import { ASSIGNMENTS_SERVICE } from './tokens.js';
-import type { AssignmentService } from './interfaces/assignmentService.interface.js';
+import type { AssignmentService } from './assignment.service.js';
+import { CreateAssignmentDto } from './dto/createAssignment.dto.js';
 import { UpdateAssignmentDto } from './dto/updateAssignment.dto.js';
+import { AssignmentResponseDto } from './dto/assignmentResponse.dto.js';
+import { FindAssignmentsQueryDto } from './dto/findAssignmentsQuery.dto.js';
+import { AssignmentMapper } from './mappers/assignment.mapper.js';
+import { JwtAuthGuard } from '../auth/guards/auth.guard.js';
 
+/**
+ * Назначения — подресурс матча. URL отражает это:
+ *   /matches/:matchId/assignments[/:assignmentId]
+ *
+ * `matchId` берётся из path при создании и при получении списка;
+ * в теле DTO его нет. Матч назначения не меняется — перенос
+ * на другой матч это delete + create.
+ *
+ * Отдельное назначение идентифицируется своим UUID:
+ *   /assignments/:id
+ *
+ * Все проверки (матч, судья, роль, дубликат на матче, «два матча
+ * в день») выполняются в репозитории внутри одной транзакции.
+ * Контроллер только вызывает сервис и маппит результат.
+ *
+ * Эндпоинт `GET /matches/:matchId/crew` (матч с бригадой и ФИО)
+ * реализован в отдельном `MatchCrewController`.
+ */
 @ApiTags('Назначения')
+@ApiBearerAuth('JWT-auth')
+@UseGuards(JwtAuthGuard)
 @Controller()
-export class AssignmentsController {
+export class AssignmentController {
   constructor(
     @Inject(ASSIGNMENTS_SERVICE)
-    private readonly assignmentsService: AssignmentService,
+    private readonly assignmentService: AssignmentService,
   ) {}
 
-  @Post('matches/:id/assignments')
-  @ApiOperation({
-    summary: 'Назначить пользователя судьей на матч с определенной ролью',
-  })
-  @ApiParam({
-    name: 'id',
-    description: 'ID матча Uint64',
-    type: String,
-    example: '1',
-  })
+  // ============================================================
+  // 1. СОЗДАНИЕ НАЗНАЧЕНИЯ
+  //
+  // `matchId` берётся из URL — в теле не передаётся.
+  //
+  // В репозитории (в одной транзакции) проверяется:
+  //   - матч существует;
+  //   - судья существует;
+  //   - роль существует;
+  //   - судья не назначен на этот матч дважды;
+  //   - судья не назначен на другой матч в тот же день.
+  // ============================================================
+  @Post('matches/:matchId/assignments')
+  @ApiOperation({ summary: 'Назначить судью на матч' })
+  @ApiParam({ name: 'matchId', type: 'string', format: 'uuid' })
   @ApiBody({ type: CreateAssignmentDto })
   @ApiCreatedResponse({
-    description: 'Пользователь успешно назначен на матч',
+    description: 'Назначение успешно создано',
     type: AssignmentResponseDto,
   })
-  @ApiBadRequestResponse({ description: 'Неверные входные данные' })
+  @ApiBadRequestResponse({ description: 'Неверные данные' })
   @ApiNotFoundResponse({
-    description: 'Матч, пользователь или роль не найдены',
+    description: 'Матч, судья или роль не найдены',
   })
   @ApiConflictResponse({
-    description: 'Пользователь уже назначен на этот матч',
+    description:
+      'Судья уже назначен на этот матч или на другой матч в тот же день',
   })
   async create(
-    @Param('id') matchId: string,
-    @Body() createAssignmentDto: CreateAssignmentDto,
+    @Param('matchId', ParseUUIDPipe) matchId: string,
+    @Body() dto: CreateAssignmentDto,
   ): Promise<AssignmentResponseDto> {
-    return this.assignmentsService.create(matchId, createAssignmentDto);
+    const data = AssignmentMapper.toCreateData(matchId, dto);
+    const entity = await this.assignmentService.create(data);
+    return AssignmentMapper.toDto(entity);
   }
 
-  @Get('matches/:id/assignments')
-  @ApiOperation({
-    summary: 'Получить список всех официальных лиц, назначенных на матч',
-  })
-  @ApiParam({
-    name: 'id',
-    description: 'ID матча Uint64',
-    type: String,
-    example: '1',
-  })
-  @ApiOkResponse({
-    description: 'Список назначений на матч получен успешно',
+  // ============================================================
+  // 2. СПИСОК НАЗНАЧЕНИЙ МАТЧА
+  //
+  // Без деталей (ФИО судьи, название роли) — только ID-ссылки.
+  // Для отображения бригады с ФИО используйте
+  // GET /matches/:matchId/crew (в MatchCrewController).
+  // ============================================================
+  @Get('matches/:matchId/assignments')
+  @ApiOperation({ summary: 'Получить список назначений матча' })
+  @ApiParam({ name: 'matchId', type: 'string', format: 'uuid' })
+  @ApiResponse({
+    status: 200,
+    description: 'Список назначений матча',
     type: [AssignmentResponseDto],
   })
-  @ApiNotFoundResponse({ description: 'Матч не найден' })
   async findAllByMatch(
-    @Param('id') matchId: string,
+    @Param('matchId', ParseUUIDPipe) matchId: string,
   ): Promise<AssignmentResponseDto[]> {
-    return this.assignmentsService.findAllByMatch(matchId);
+    const entities = await this.assignmentService.findAllByMatch(matchId);
+    return AssignmentMapper.toDtoList(entities);
   }
 
-  @Delete('assignments/:id')
+  // ============================================================
+  // 3. ГЛОБАЛЬНЫЙ СПИСОК НАЗНАЧЕНИЙ С ФИЛЬТРАМИ
+  //
+  // Сценарии:
+  //   - «где судил Петров» → ?userId=X
+  //   - «все назначения VAR» → ?fieldRoleId=X
+  //   - «назначения за неделю» → ?dateFrom=&dateTo=
+  //
+  // Без пагинации: назначения всегда смотрят с фильтром,
+  // без фильтра список бессмысленен (2000 записей за сезон
+  // никто не листает).
+  // ============================================================
+  @Get('assignments')
   @ApiOperation({
-    summary: 'Отменить назначение (удалить судью из матча)',
+    summary: 'Получить список назначений с фильтрами',
+    description:
+      'Для отчётов: где судил Петров, все VAR, назначения ' +
+      'за период. Без пагинации — всегда с фильтром.',
   })
+  @ApiResponse({
+    status: 200,
+    description: 'Список назначений',
+    type: [AssignmentResponseDto],
+  })
+  async findAll(
+    @Query() query: FindAssignmentsQueryDto,
+  ): Promise<AssignmentResponseDto[]> {
+    const entities = await this.assignmentService.findAll({
+      filter: {
+        matchId: query.matchId,
+        userId: query.userId,
+        fieldRoleId: query.fieldRoleId,
+        dateFrom: query.dateFrom ? new Date(query.dateFrom) : undefined,
+        dateTo: query.dateTo ? new Date(query.dateTo) : undefined,
+      },
+      orderDir: query.orderDir ?? 'ASC',
+    });
+    return AssignmentMapper.toDtoList(entities);
+  }
+
+  // ============================================================
+  // 4. ПОЛУЧЕНИЕ НАЗНАЧЕНИЯ ПО ID
+  //
+  // Назначение идентифицируется своим UUID. Проверка
+  // «принадлежит ли оно матчу» не делается: UUID глобально
+  // уникален, а matchId назначения не меняется.
+  // ============================================================
+  @Get('assignments/:id')
+  @ApiOperation({ summary: 'Получить назначение по ID' })
   @ApiParam({
     name: 'id',
-    description: 'ID назначения',
-    type: Number,
-    example: 1,
+    type: 'string',
+    format: 'uuid',
+    description: 'UUID назначения',
   })
-  @ApiOkResponse({
-    description: 'Назначение успешно удалено',
-    schema: {
-      example: { message: 'Назначение с ID 1 успешно удалено' },
-    },
+  @ApiResponse({
+    status: 200,
+    description: 'Найденное назначение',
+    type: AssignmentResponseDto,
   })
   @ApiNotFoundResponse({ description: 'Назначение не найдено' })
-  @HttpCode(HttpStatus.OK)
-  async remove(
-    @Param('id', ParseIntPipe) id: number,
-  ): Promise<{ message: string }> {
-    return this.assignmentsService.remove(id);
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<AssignmentResponseDto> {
+    const entity = await this.assignmentService.findById(id);
+    if (!entity) {
+      throw new NotFoundException('Назначение не найдено');
+    }
+    return AssignmentMapper.toDto(entity);
   }
 
+  // ============================================================
+  // 5. ЧАСТИЧНОЕ ОБНОВЛЕНИЕ НАЗНАЧЕНИЯ
+  //
+  // `matchId` не меняется: перенос на другой матч — это
+  // delete + create.
+  //
+  // При смене `userId` репозиторий повторно проверяет нового
+  // судью: существует, нет дубликата на матче (исключая текущее
+  // назначение), нет другого матча в тот же день (исключая
+  // текущий матч).
+  //
+  // При смене `fieldRoleId` — проверяет, что роль существует.
+  // ============================================================
   @Patch('assignments/:id')
-  @ApiOperation({
-    summary: 'Обновить назначение судьи',
-    description:
-      'Позволяет заменить судью или изменить его роль в уже существующем назначении',
-  })
+  @ApiOperation({ summary: 'Обновить назначение (частичное обновление)' })
   @ApiParam({
     name: 'id',
-    description: 'ID назначения',
-    type: Number,
-    example: 1,
+    type: 'string',
+    format: 'uuid',
+    description: 'UUID назначения',
   })
   @ApiBody({ type: UpdateAssignmentDto })
-  @ApiOkResponse({
-    description: 'Назначение успешно обновлено',
+  @ApiResponse({
+    status: 200,
+    description: 'Обновлённое назначение',
     type: AssignmentResponseDto,
   })
   @ApiNotFoundResponse({
-    description: 'Назначение, пользователь или роль не найдены',
+    description: 'Назначение, судья или роль не найдены',
   })
+  @ApiBadRequestResponse({ description: 'Неверные данные' })
   @ApiConflictResponse({
-    description: 'Новый пользователь уже назначен на этот матч',
+    description:
+      'Новый судья уже назначен на этот матч или на другой матч ' +
+      'в тот же день',
   })
-  @ApiBadRequestResponse({ description: 'Неверные входные данные' })
   async update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateAssignmentDto: UpdateAssignmentDto,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAssignmentDto,
   ): Promise<AssignmentResponseDto> {
-    return this.assignmentsService.update(id, updateAssignmentDto);
+    const data = AssignmentMapper.toUpdateData(id, dto);
+    const updated = await this.assignmentService.update(data);
+    return AssignmentMapper.toDto(updated);
+  }
+
+  // ============================================================
+  // 6. УДАЛЕНИЕ НАЗНАЧЕНИЯ
+  //
+  // Ссылок на назначение из других таблиц нет — простое удаление.
+  // ============================================================
+  @Delete('assignments/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Удалить назначение' })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'UUID назначения',
+  })
+  @ApiNoContentResponse({ description: 'Назначение удалено' })
+  @ApiNotFoundResponse({ description: 'Назначение не найдено' })
+  async remove(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    await this.assignmentService.delete(id);
   }
 }

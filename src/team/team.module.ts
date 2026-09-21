@@ -1,26 +1,19 @@
-import { TeamRepository } from './repository/team.repository.js';
-import { ScheduleRepository } from '../schedule/repository/schedule.repository.js';
-import { YdbModule } from '../common/ydb/ydb.module.js';
+// src/teams/team.module.ts
+
 import { Module } from '@nestjs/common';
 import { TeamController } from './team.controller.js';
-import { TEAM_SERVICE } from './tokens.js';
-import { YdbTeamService } from './team.service.js';
+import { TeamService } from './team.service.js';
+import { TeamRepository } from './repository/team.repository.js';
+import { YdbModule } from '../common/ydb/ydb.module.js';
 import { AuthModule } from '../auth/auth.module.js';
 
 @Module({
-  controllers: [TeamController],
   imports: [
-    YdbModule,
-    AuthModule, // для JWT-защиты
+    YdbModule, // даёт DRIZZLE для TeamRepository
+    AuthModule, // даёт JwtAuthGuard для TeamController
   ],
-  providers: [
-    ScheduleRepository,
-    TeamRepository,
-    {
-      provide: TEAM_SERVICE,
-      useClass: YdbTeamService,
-    },
-  ],
-  exports: [TEAM_SERVICE],
+  controllers: [TeamController],
+  providers: [TeamService, TeamRepository],
+  exports: [TeamService],
 })
 export class TeamModule {}

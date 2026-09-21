@@ -1,24 +1,24 @@
-import { CityRepository } from './repository/city.repository.js';
-import { ScheduleRepository } from '../schedule/repository/schedule.repository.js';
-import { YdbModule } from '../common/ydb/ydb.module.js';
+// src/cities/city.module.ts
+
 import { Module } from '@nestjs/common';
-import { CITY_SERVICE } from './tokens.js';
 import { CityController } from './city.controller.js';
-import { YdbCityService } from './city.service.js';
+import { CityService } from './city.service.js';
+import { CityRepository } from './repository/city.repository.js';
+import { CITY_SERVICE } from './tokens.js';
+import { YdbModule } from '../common/ydb/ydb.module.js';
 import { AuthModule } from '../auth/auth.module.js';
 
 @Module({
-  controllers: [CityController],
   imports: [
-    YdbModule,
+    YdbModule, // даёт DRIZZLE для CityRepository
     AuthModule, // для JWT-защиты
   ],
+  controllers: [CityController],
   providers: [
-    ScheduleRepository,
     CityRepository,
     {
       provide: CITY_SERVICE,
-      useClass: YdbCityService,
+      useClass: CityService,
     },
   ],
   exports: [CITY_SERVICE],

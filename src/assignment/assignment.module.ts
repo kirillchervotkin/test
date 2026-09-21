@@ -1,18 +1,18 @@
 import { Module } from '@nestjs/common';
-
-import { InMemoryAssignmentService } from './inMemoryAssignment.service.js';
+import { AssignmentController } from './assignment.controller.js';
+import { MatchCrewController } from './match-crew.controller.js';
+import { AssignmentService } from './assignment.service.js';
+import { AssignmentRepository } from './repository/assignment.repository.js';
 import { ASSIGNMENTS_SERVICE } from './tokens.js';
-import { AssignmentsController as AssignmentController } from './assignment.controller.js';
-import { MatchModule } from '../match/match.module.js';
+import { YdbModule } from '../common/ydb/ydb.module.js';
+import { AuthModule } from '../auth/auth.module.js';
 
 @Module({
-  imports: [MatchModule],
-  controllers: [AssignmentController],
+  imports: [YdbModule, AuthModule],
+  controllers: [AssignmentController, MatchCrewController],
   providers: [
-    {
-      provide: ASSIGNMENTS_SERVICE,
-      useClass: InMemoryAssignmentService,
-    },
+    AssignmentRepository,
+    { provide: ASSIGNMENTS_SERVICE, useClass: AssignmentService },
   ],
   exports: [ASSIGNMENTS_SERVICE],
 })

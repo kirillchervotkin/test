@@ -1,10 +1,37 @@
-import { PartialType } from '@nestjs/swagger';
-import { CreateCityDto } from './createCity.dto.js';
-import { Constraint } from '../../common/decorators/unique.decorator.js';
-export class UpdateCityDto extends PartialType(CreateCityDto) {
-  @Constraint({
-    dbField: 'name',
-    messages: { unique: 'validation.UNIQUE_CITY' },
+// src/cities/dto/updateCity.dto.ts
+
+import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsOptional, MaxLength } from 'class-validator';
+
+/**
+ * `id` здесь отсутствует намеренно: он берётся из path-параметра
+ * маршрута (`PATCH /cities/:id`) и передаётся в маппер отдельным
+ * аргументом.
+ *
+ * Семантика `undefined` vs `null`:
+ *   - `undefined` — поле не передано, не трогаем в БД.
+ *   - `null` — явное «обнулить». Для `region` — очистить регион.
+ */
+export class UpdateCityDto {
+  @ApiProperty({
+    description: 'Новое название города (необязательно)',
+    required: false,
+    example: 'Москва',
   })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
   name?: string;
+
+  @ApiProperty({
+    description:
+      'Новый регион. Чтобы очистить, передайте null (необязательно).',
+    required: false,
+    nullable: true,
+    example: 'Московская область',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  region?: string | null;
 }
