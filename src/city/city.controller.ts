@@ -14,6 +14,7 @@ import {
   NotFoundException,
   HttpCode,
   HttpStatus,
+  Inject,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -28,7 +29,8 @@ import {
   ApiCreatedResponse,
   ApiNoContentResponse,
 } from '@nestjs/swagger';
-import { CityService } from './city.service.js';
+import { CITY_SERVICE } from './tokens.js';
+import type { CityService } from './city.service.js';
 import { CreateCityDto } from './dto/createCity.dto.js';
 import { UpdateCityDto } from './dto/updateCity.dto.js';
 import { CityResponseDto } from './dto/cityResponse.dto.js';
@@ -45,7 +47,10 @@ import { JwtAuthGuard } from '../auth/guards/auth.guard.js';
 @UseGuards(JwtAuthGuard)
 @Controller('cities')
 export class CityController {
-  constructor(private readonly cityService: CityService) {}
+  constructor(
+    @Inject(CITY_SERVICE)
+    private readonly cityService: CityService,
+  ) {}
 
   // ============================================================
   // 1. СОЗДАНИЕ ГОРОДА

@@ -31,6 +31,7 @@ import { StoreDtoValidationPipe } from './common/pipes/store-dto-validation.pipe
 import { MappingMiddleware } from './common/middlwares/mapping.middleware.js';
 import { YdbModule } from './common/ydb/ydb.module.js';
 import { DbConstraintExceptionFilter } from './common/exceptionFilters/dbConstraintExceptionFilter.js';
+import { YdbExceptionFilter } from './common/ydb/ydb-exception.filter.js';
 import { UserListModule } from './user-list/user-list.module.js';
 
 // Определяем __dirname для ESM (исправление ReferenceError)
@@ -182,20 +183,30 @@ const __dirname = dirname(__filename);
       useValue: new Logger(),
     },
     ExceptionUtilsService,
+
     // ВАЖНО: порядок регистрации APP_FILTER влияет на порядок применения.
     // Фильтры применяются в порядке, обратном порядку объявления.
-    // Чтобы ValidationExceptionFilter перехватывал I18nValidationException
-    // до того, как его перехватит DbConstraintExceptionFilter (который ловит все ошибки),
-    // мы должны объявить ValidationExceptionFilter ПОСЛЕДНИМ в этом списке.
-    // Таким образом, он будет применён первым.
+    // Значит:
+    //   - последний в списке → применяется ПЕРВЫМ;
+    //   - первый в списке  → применяется ПОСЛЕДНИМ.
+    //
+    // Порядок применения (сверху вниз):
+    //   1. YdbExceptionFilter       — ловит YDB-ошибки; чужие пробрасывает
+    //   2. ValidationExceptionFilter — ловит I18nValidationException
+    //   3. DbConstraintExceptionFilter — ловит всё остальное (Db*)
     {
       provide: APP_FILTER,
       useClass: DbConstraintExceptionFilter,
     },
     {
       provide: APP_FILTER,
-      useClass: ValidationExceptionFilter, // Последний – применяется первым
+      useClass: ValidationExceptionFilter,
     },
+    {
+      provide: APP_FILTER,
+      useClass: YdbExceptionFilter, // Последний – применяется первым
+    },
+
     AdminInitializationService,
     {
       provide: 'PORT',

@@ -9,21 +9,8 @@ import {
   IsDateString,
   IsIn,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
-/**
- * Query-параметры для `GET /matches`.
- *
- * Все фильтры опциональны и комбинируются через AND.
- *
- * `teamId` — особый случай: в репозитории он превращается в
- * `WHERE home_team_id = X OR away_team_id = X`. YDB обычно
- * использует только один индекс, поэтому такой запрос будет
- * full-scan по одному из индексов. Для масштаба «тысячи матчей»
- * это приемлемо.
- *
- * Пагинация нужна: матчей сотни и тысячи, в отличие от турниров
- * и этапов.
- */
 export class FindMatchesQueryDto {
   @ApiProperty({
     description: 'Фильтр по ID турнира',
@@ -67,6 +54,7 @@ export class FindMatchesQueryDto {
     example: 5,
   })
   @IsOptional()
+  @Type(() => Number) // ← строку в число
   @IsInt()
   @Min(1)
   tourNumber?: number;
@@ -95,6 +83,7 @@ export class FindMatchesQueryDto {
     example: 100,
   })
   @IsOptional()
+  @Type(() => Number) // ← строку в число
   @IsInt()
   @Min(1)
   limit?: number;
@@ -105,6 +94,7 @@ export class FindMatchesQueryDto {
     example: 0,
   })
   @IsOptional()
+  @Type(() => Number) // ← строку в число
   @IsInt()
   @Min(0)
   offset?: number;

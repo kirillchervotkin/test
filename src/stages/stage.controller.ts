@@ -14,6 +14,7 @@ import {
   NotFoundException,
   HttpCode,
   HttpStatus,
+  Inject,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -28,7 +29,8 @@ import {
   ApiCreatedResponse,
   ApiNoContentResponse,
 } from '@nestjs/swagger';
-import { StageService } from './stage.service.js';
+import { STAGES_SERVICE } from './tokens.js';
+import type { StageService } from './stage.service.js';
 import { CreateStageDto } from './dto/createStage.dto.js';
 import { UpdateStageDto } from './dto/updateStage.dto.js';
 import { StageResponseDto } from './dto/stageResponse.dto.js';
@@ -51,7 +53,10 @@ import { JwtAuthGuard } from '../auth/guards/auth.guard.js';
 @UseGuards(JwtAuthGuard)
 @Controller('tournaments/:tournamentId/stages')
 export class StageController {
-  constructor(private readonly stageService: StageService) {}
+  constructor(
+    @Inject(STAGES_SERVICE)
+    private readonly stageService: StageService,
+  ) {}
 
   // ============================================================
   // 1. СОЗДАНИЕ ЭТАПА

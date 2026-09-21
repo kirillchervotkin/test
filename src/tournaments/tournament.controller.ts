@@ -14,6 +14,7 @@ import {
   NotFoundException,
   HttpCode,
   HttpStatus,
+  Inject,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -28,7 +29,8 @@ import {
   ApiCreatedResponse,
   ApiNoContentResponse,
 } from '@nestjs/swagger';
-import { TournamentService } from './tournament.service.js';
+import { TOURNAMENTS_SERVICE } from './tokens.js';
+import type { TournamentService } from './tournament.service.js';
 import { CreateTournamentDto } from './dto/createTournament.dto.js';
 import { UpdateTournamentDto } from './dto/updateTournament.dto.js';
 import { TournamentResponseDto } from './dto/tournamentResponse.dto.js';
@@ -41,7 +43,10 @@ import { JwtAuthGuard } from '../auth/guards/auth.guard.js';
 @UseGuards(JwtAuthGuard)
 @Controller('tournaments')
 export class TournamentController {
-  constructor(private readonly tournamentService: TournamentService) {}
+  constructor(
+    @Inject(TOURNAMENTS_SERVICE)
+    private readonly tournamentService: TournamentService,
+  ) {}
 
   // ============================================================
   //  СОЗДАНИЕ ТУРНИРА
